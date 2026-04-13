@@ -136,3 +136,28 @@ def detect_stock(hand: dict, operator: str) -> bool:
         return False
     ranks = {c.__class__.__name__ for c in hand.get(operator, [])}
     return 'Koenig' in ranks and 'Ober' in ranks
+
+
+class GameSession:
+    def __init__(self, end_game: int = 1000):
+        self.end_game = end_game
+        self.point_sn = 0
+        self.point_ow = 0
+
+    def _initial_state(self, play: Play) -> dict:
+        return {
+            "type": "game_start",
+            "hand": hand_to_codes(play.comps),
+            "first_player": POSITION_NAMES[play.first],
+            "players": [
+                {
+                    "name": POSITION_NAMES[p],
+                    "position": p,
+                    "is_partner": p == 'compn',
+                    "card_count": 9,
+                }
+                for p in ['compe', 'compn', 'compo']
+            ],
+            "scores": {"sn": self.point_sn, "ow": self.point_ow},
+            "target": self.end_game,
+        }

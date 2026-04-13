@@ -119,6 +119,7 @@ def test_trick_points_trumpf_mode():
     assert trick_points(trick, 'Eicheln') == 45  # 20+11+10+4
 
 
+from Cards_refactored import Play
 from ausbau.game_session import ai_select_card, describe_weis, detect_stock
 
 
@@ -175,3 +176,28 @@ def test_detect_stock_false_missing_ober():
     hand = {suit: [] for suit in SUITS}
     hand['Eicheln'] = [Koenig(8, 'Eicheln')]
     assert detect_stock(hand, 'Eicheln') is False
+
+
+from ausbau.game_session import GameSession
+
+
+def test_initial_state_structure():
+    session = GameSession(end_game=500)
+    play = Play(1)
+    state = session._initial_state(play)
+
+    assert state['type'] == 'game_start'
+    assert len(state['hand']) == 9
+    assert state['scores'] == {'sn': 0, 'ow': 0}
+    assert state['target'] == 500
+    assert len(state['players']) == 3
+    assert any(p['is_partner'] for p in state['players'])
+    assert all('card_count' in p for p in state['players'])
+
+
+def test_initial_state_scores_accumulate():
+    session = GameSession(end_game=500)
+    session.point_sn = 42
+    session.point_ow = 17
+    state = session._initial_state(Play(1))
+    assert state['scores'] == {'sn': 42, 'ow': 17}

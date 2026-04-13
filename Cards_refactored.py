@@ -306,7 +306,7 @@ class Play(Players):
         
         # Initialize card values for each suit and rank
         self.farben = farben if farben is not None else {
-            s: [game_state.card_attributes[y] for y in range(10)] for s in SUITS
+            s: [game_state.card_attributes[y] for y in range(1, 11)] for s in SUITS
         }
         
         # Call parent constructor
