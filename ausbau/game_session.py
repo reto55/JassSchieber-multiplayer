@@ -198,3 +198,44 @@ class GameSession:
             "suit": play.operator,
             "by": chooser,
         })
+
+    async def _weis_phase(self, websocket, play: Play) -> None:
+        """Handle weis declaration. Asks human if they have combinations; AI always announces."""
+        human_weis = describe_weis(wiis(play.comps), wiis_gleiche(play.comps))
+        weis_announce = {}
+
+        if human_weis:
+            await websocket.send_json({"type": "weis_request", "your_weis": human_weis})
+            msg = await websocket.receive_json()
+            if msg.get('announce'):
+                weis_announce['comps'] = human_weis
+
+        # AI players always announce if they have weis
+        for player in ['compo', 'compn', 'compe']:
+            pw = describe_weis(
+                wiis(play.__dict__[player]),
+                wiis_gleiche(play.__dict__[player]),
+            )
+            if pw:
+                weis_announce[player] = pw
+
+        sn_pts = sum(w['points'] for p in SN_PLAYERS if p in weis_announce
+                     for w in weis_announce[p])
+        ow_pts = sum(w['points'] for p in OW_PLAYERS if p in weis_announce
+                     for w in weis_announce[p])
+        self.point_sn += sn_pts
+        self.point_ow += ow_pts
+
+        announcements = [
+            {
+                "player": POSITION_NAMES[p],
+                "weis": weis_announce[p],
+                "points": sum(w['points'] for w in weis_announce[p]),
+            }
+            for p in PLAYERS if p in weis_announce
+        ]
+        await websocket.send_json({
+            "type": "weis_result",
+            "announcements": announcements,
+            "scores": {"sn": self.point_sn, "ow": self.point_ow},
+        })

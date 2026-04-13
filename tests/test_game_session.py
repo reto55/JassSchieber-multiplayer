@@ -234,3 +234,36 @@ def test_trump_phase_human_leads_schiebt():
 
     assert play.operator in ['Eicheln', 'Rosen', 'Schellen', 'Schilten', 'Oben', 'Unten']
     assert play.starter == 'compn'
+
+
+def test_weis_phase_sends_result():
+    """weis_result is always sent, even if no weis exist."""
+    session = GameSession()
+    play = Play(1)
+    ws = AsyncMock()
+    asyncio.run(session._weis_phase(ws, play))
+
+    last = ws.send_json.call_args_list[-1][0][0]
+    assert last['type'] == 'weis_result'
+    assert 'announcements' in last
+    assert 'scores' in last
+
+
+def test_weis_phase_human_announces_adds_points():
+    """If human announces weis, SN score increases."""
+    from unittest.mock import patch
+
+    session = GameSession()
+    play = Play(1)
+
+    fake_weis = [{'name': 'Dreier', 'suit': 'Eicheln', 'points': 20}]
+    ws = AsyncMock()
+    ws.receive_json = AsyncMock(return_value={
+        "type": "declare_weis", "weis": ["Dreier"], "announce": True
+    })
+
+    with patch('ausbau.game_session.describe_weis', return_value=fake_weis):
+        asyncio.run(session._weis_phase(ws, play))
+
+    # Human (comps) is SN team — points should have increased
+    assert session.point_sn >= 20
