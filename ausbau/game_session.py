@@ -239,3 +239,99 @@ class GameSession:
             "announcements": announcements,
             "scores": {"sn": self.point_sn, "ow": self.point_ow},
         })
+
+    async def _play_trick(self, websocket, play: Play) -> str:
+        """Play one trick. Returns the winning player key."""
+        trick = {}
+        lead_suit = None
+        player = play.first
+
+        for i in range(4):
+            card = None
+            if player == 'comps':
+                valid = get_valid_cards(play.comps, lead_suit, play.operator)
+                await websocket.send_json({"type": "your_turn", "valid_cards": valid})
+                while True:
+                    msg = await websocket.receive_json()
+                    if msg['type'] != 'play_card':
+                        continue
+                    found, suit = find_card_in_hand(msg['card'], play.comps)
+                    if found is not None and msg['card'] in valid:
+                        play.comps[suit].remove(found)
+                        card = found
+                        break
+                    await websocket.send_json({
+                        "type": "error",
+                        "message": f"Ungültige Karte: {msg.get('card')}",
+                    })
+                    await websocket.send_json({"type": "your_turn", "valid_cards": valid})
+            else:
+                card = ai_select_card(play.__dict__[player], lead_suit, play.operator)
+                play.__dict__[player][card.suit].remove(card)
+                await asyncio.sleep(0.8)
+
+            if i == 0:
+                lead_suit = card.suit
+            trick[player] = card
+
+            await websocket.send_json({
+                "type": "card_played",
+                "player": POSITION_NAMES[player],
+                "player_key": player,
+                "card": card_to_code(card),
+            })
+            player = play.folger[player]
+
+        winner = determine_trick_winner(trick, play.first, play.operator, play.folger)
+        pts = trick_points(trick, play.operator)
+        if winner in SN_PLAYERS:
+            self.point_sn += pts
+        else:
+            self.point_ow += pts
+        return winner
+
+    async def _run_spiel(self, websocket, spiel_num: int) -> None:
+        """Deal, trump, weis, then 9 tricks for one Spiel."""
+        play = Play(spiel_num)
+        await websocket.send_json(self._initial_state(play))
+        await self._trump_phase(websocket, play)
+        await self._weis_phase(websocket, play)
+
+        for trick_num in range(9):
+            winner = await self._play_trick(websocket, play)
+            is_last = trick_num == 8
+            if is_last:
+                if winner in SN_PLAYERS:
+                    self.point_sn += 5   # last trick bonus
+                else:
+                    self.point_ow += 5
+            play.first = winner  # trick winner leads next
+            await websocket.send_json({
+                "type": "trick_end",
+                "winner": POSITION_NAMES[winner],
+                "winner_key": winner,
+                "points_sn": self.point_sn,
+                "points_ow": self.point_ow,
+            })
+
+        await websocket.send_json({
+            "type": "round_end",
+            "score_sn": self.point_sn,
+            "score_ow": self.point_ow,
+            "winner_team": get_winner(self.point_sn, self.point_ow),
+        })
+
+    async def run(self, websocket) -> None:
+        """Main loop: cycles through 4 Spiele per round until end_game score is reached."""
+        spiel_num = 0
+        while True:
+            spiel_num = (spiel_num % 4) + 1
+            await self._run_spiel(websocket, spiel_num)
+            if check_game_end(self.point_sn, self.point_ow, self.end_game):
+                await websocket.send_json({
+                    "type": "game_end",
+                    "winner_team": get_winner(self.point_sn, self.point_ow),
+                    "final_scores": {"sn": self.point_sn, "ow": self.point_ow},
+                })
+                return
+            await asyncio.sleep(2)  # pause between Spiele
