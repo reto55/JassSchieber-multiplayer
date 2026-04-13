@@ -97,3 +97,42 @@ def trick_points(trick: dict, operator: str) -> int:
         else:
             total += card.wunten
     return total
+
+
+def ai_select_card(hand: dict, lead_suit: Optional[str], operator: str) -> Card:
+    """Simple AI: lead=highest point value, follow=lowest point value."""
+    valid_codes = get_valid_cards(hand, lead_suit, operator)
+    valid_cards = [find_card_in_hand(code, hand)[0] for code in valid_codes]
+
+    def point_value(card: Card) -> int:
+        if operator in SUITS:
+            return card.wtrumpf if card.suit == operator else card.wfarbe
+        elif operator == 'Oben':
+            return card.woben
+        return card.wunten
+
+    if lead_suit is None:
+        return max(valid_cards, key=point_value)
+    return min(valid_cards, key=point_value)
+
+
+def describe_weis(weis_combos: list, weis_gleiche: list) -> list:
+    """Convert raw wiis() / wiis_gleiche() output to human-readable dicts."""
+    result = []
+    SCORE_MAP = {3: ('Dreier', 20), 4: ('Vierter', 50)}
+    for suit_idx, seq_len, _ in weis_combos:
+        if seq_len is None or seq_len < 3:
+            continue
+        name, pts = SCORE_MAP.get(seq_len, (f'{seq_len}er', 100))
+        result.append({'name': name, 'suit': SUITS[suit_idx], 'points': pts})
+    if weis_gleiche:
+        result.append({'name': 'Viererle', 'suit': None, 'points': 100})
+    return result
+
+
+def detect_stock(hand: dict, operator: str) -> bool:
+    """True if hand has König + Ober of the trump suit (Stöck, 20pts)."""
+    if operator not in SUITS:
+        return False
+    ranks = {c.__class__.__name__ for c in hand.get(operator, [])}
+    return 'Koenig' in ranks and 'Ober' in ranks

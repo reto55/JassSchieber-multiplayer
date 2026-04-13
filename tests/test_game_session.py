@@ -117,3 +117,61 @@ def test_trick_points_trumpf_mode():
         'compe': Koenig(8, 'Rosen'),    # non-trump → wfarbe=4
     }
     assert trick_points(trick, 'Eicheln') == 45  # 20+11+10+4
+
+
+from ausbau.game_session import ai_select_card, describe_weis, detect_stock
+
+
+def test_ai_leads_plays_highest_value():
+    hand = {suit: [] for suit in SUITS}
+    hand['Eicheln'] = [Ass(9, 'Eicheln'), Sechs(1, 'Eicheln')]
+    card = ai_select_card(hand, None, 'Rosen')
+    assert card_to_code(card) == 'EA'
+
+
+def test_ai_follows_plays_lowest_value():
+    hand = {suit: [] for suit in SUITS}
+    hand['Eicheln'] = [Ass(9, 'Eicheln'), Sechs(1, 'Eicheln')]
+    card = ai_select_card(hand, 'Eicheln', 'Rosen')
+    assert card_to_code(card) == 'E6'
+
+
+def test_describe_weis_dreier():
+    combos = [(0, 3, 7)]  # Eicheln, 3-sequence
+    result = describe_weis(combos, [])
+    assert result == [{'name': 'Dreier', 'suit': 'Eicheln', 'points': 20}]
+
+
+def test_describe_weis_vierter():
+    combos = [(2, 4, 8)]  # Schellen, 4-sequence
+    result = describe_weis(combos, [])
+    assert result == [{'name': 'Vierter', 'suit': 'Schellen', 'points': 50}]
+
+
+def test_describe_weis_fuenfer():
+    combos = [(1, 5, 9)]  # Rosen, 5-sequence
+    result = describe_weis(combos, [])
+    assert result == [{'name': '5er', 'suit': 'Rosen', 'points': 100}]
+
+
+def test_describe_weis_viererle():
+    result = describe_weis([], [18])  # Under in all suits
+    assert result == [{'name': 'Viererle', 'suit': None, 'points': 100}]
+
+
+def test_detect_stock_true():
+    hand = {suit: [] for suit in SUITS}
+    hand['Eicheln'] = [Koenig(8, 'Eicheln'), Ober(7, 'Eicheln')]
+    assert detect_stock(hand, 'Eicheln') is True
+
+
+def test_detect_stock_false_wrong_suit():
+    hand = {suit: [] for suit in SUITS}
+    hand['Eicheln'] = [Koenig(8, 'Eicheln'), Ober(7, 'Eicheln')]
+    assert detect_stock(hand, 'Rosen') is False
+
+
+def test_detect_stock_false_missing_ober():
+    hand = {suit: [] for suit in SUITS}
+    hand['Eicheln'] = [Koenig(8, 'Eicheln')]
+    assert detect_stock(hand, 'Eicheln') is False
