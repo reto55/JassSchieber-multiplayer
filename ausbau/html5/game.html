@@ -1,37 +1,119 @@
-<html lang=en>
+<!DOCTYPE html>
+<html lang="de">
 <head>
-	<!--
-	
-	 CSS3 Card Games Schieber
-	 
-	 Copyright 2018, Reto Müller
-	 reto@platzaun.ch
-	   
-	 All Right Reserved.
-	 
-	-->
-	
-	<meta charset=utf-8>
-	<title>Schieber Comps</title>
-	<link rel="stylesheet" href="css/game.css" />
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Schieber</title>
+  <link rel="stylesheet" href="/static/css/game.css">
 </head>
 <body>
-	<header>
-			<h1>SchieberComps</h1>
-	</header>
-<section id="game">
-    <div id="cards">
-        <div class="card">
-            <div class="face front"></div>
-            <div class="face back"></div>
-        </div> <!-- .card -->
-    </div> <!-- #cards -->
-</section> <!-- #game -->
-	<footer>
-		This is an example to show basic Schieber Karten.
-	</footer>
-	
-	<script src="js/jquery-1.6.min.js"></script>	
-	<script src="js/game.js"></script>
+<div id="game">
+
+  <!-- ① AI Bar -->
+  <div id="ai-bar">
+    <div class="ai-player" id="player-compe">
+      <div class="ai-avatar">W</div>
+      <div class="ai-info">
+        <div class="ai-name">West</div>
+        <div class="ai-cards" id="cards-compe"></div>
+      </div>
+    </div>
+    <div class="ai-player partner" id="player-compn">
+      <div class="ai-avatar">N</div>
+      <div class="ai-info">
+        <div class="ai-name">Nord ★</div>
+        <div class="ai-cards" id="cards-compn"></div>
+      </div>
+    </div>
+    <div class="ai-player" id="player-compo">
+      <div class="ai-avatar">O</div>
+      <div class="ai-info">
+        <div class="ai-name">Ost</div>
+        <div class="ai-cards" id="cards-compo"></div>
+      </div>
+    </div>
+    <div id="score-panel">
+      <div class="score-label">PUNKTE</div>
+      <div class="score-row">
+        <div class="score-team">
+          <span class="team-label sn-label">SN</span>
+          <span class="team-score" id="score-sn">0</span>
+        </div>
+        <div class="score-divider"></div>
+        <div class="score-team">
+          <span class="team-label ow-label">OW</span>
+          <span class="team-score" id="score-ow">0</span>
+        </div>
+      </div>
+      <div class="score-target" id="score-target">Ziel: 1000</div>
+    </div>
+  </div>
+
+  <!-- ② Table -->
+  <div id="table">
+    <div id="trump-badge" class="hidden">
+      <span class="trump-label">Trumpf</span>
+      <span id="trump-value"></span>
+    </div>
+    <div id="round-info">
+      <span id="active-player"></span>
+    </div>
+
+    <!-- ③ Trick area -->
+    <div id="trick-area">
+      <div class="trick-slot" id="trick-compn">
+        <span class="trick-label">Nord</span>
+      </div>
+      <div id="trick-middle-row">
+        <div class="trick-slot" id="trick-compe">
+          <span class="trick-label">West</span>
+        </div>
+        <div class="trick-slot" id="trick-comps">
+          <span class="trick-label">Du</span>
+        </div>
+        <div class="trick-slot" id="trick-compo">
+          <span class="trick-label">Ost</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ④ Game log -->
+    <div id="game-log">
+      <div id="log-entries"></div>
+    </div>
+  </div>
+
+  <!-- ⑤ Human hand -->
+  <div id="hand-area">
+    <div id="hand-label">Deine Hand</div>
+    <div id="hand-cards"></div>
+  </div>
+
+</div>
+
+<!-- Trump modal -->
+<div id="trump-modal" class="modal hidden">
+  <div class="modal-overlay"></div>
+  <div class="modal-box">
+    <h3>Trumpf wählen</h3>
+    <div id="trump-options" class="suit-grid"></div>
+    <button id="schieben-btn" class="hidden schieben-btn">↩ Schieben</button>
+  </div>
+</div>
+
+<!-- Weis modal -->
+<div id="weis-modal" class="modal hidden">
+  <div class="modal-overlay"></div>
+  <div class="modal-box">
+    <h3>Weis ansagen?</h3>
+    <div id="weis-list"></div>
+    <div class="modal-actions">
+      <button id="weis-announce-btn" class="btn-primary">✓ Ansagen</button>
+      <button id="weis-pass-btn" class="btn-secondary">Schweigen</button>
+    </div>
+  </div>
+</div>
+
+<script src="/static/js/schieber.js"></script>
 </body>
 </html>
