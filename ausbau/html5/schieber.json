@@ -1,0 +1,17 @@
+{
+  "anz": "1",
+  "date": "datetime.now()",
+  "end": "date- datetime.now",
+  "runde": {
+    "num": "1",
+    "name": "comps",
+    "first": "compo"
+  },
+  "zug": {
+    "num": "1",
+    "first": "compo",
+    "trumpf": "unten",
+    "pointNS": "0",
+    "pointOE": "0"
+  }
+}

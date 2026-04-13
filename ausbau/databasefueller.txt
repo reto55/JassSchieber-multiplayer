@@ -1,0 +1,45 @@
+database = "schieber.db"
+conn = create_connection(database)
+with conn:
+    schieber = (Schieber['date'],Schieber['date'],end_game)
+	schieber_id = create(conn, schieber)
+	
+	end_date = (Schieber['end_date'],schieber_id)
+	update_schieber(conn, end_date)
+	
+	
+	play = (schieber_id,runde, i, y, 1, dealer.first, dealer.operator,human['compo'],pointOW,pointSN, dealer.compo['Eicheln'],dealer.compo['Rosen'], dealer.compo['Schellen'], dealer.compo['Schilten'])
+	create_play(conn, play)
+	
+	play = (schieber_id,runde, i, y, 2, dealer.first, dealer.operator,human['compn'],pointOW,pointSN, dealer.compn['Eicheln'],dealer.compn['Rosen'], dealer.compn['Schellen'], dealer.compn['Schilten'])
+	create_play(conn, play)
+	
+	play = (schieber_id,runde, i, y, 3, dealer.first, dealer.operator,human['compe'],pointOW,pointSN, dealer.compe['Eicheln'],dealer.compe['Rosen'], dealer.compe['Schellen'], dealer.compe['Schilten'])
+	create_play(conn, play)
+	
+	play = (schieber_id,runde, i, y, 4, dealer.first, dealer.operator,human['comps'],pointOW,pointSN, dealer.comps['Eicheln'],dealer.comps['Rosen'], dealer.comps['Schellen'], dealer.comps['Schilten'])
+	create_play(conn, play)
+	
+	
+	game = (schieber_id, runde, i, y, spieler_id[dealer.first], dealer.first, dealer.operator,dealer.game[dealer.first])
+	create_game(conn, game)
+	
+	game = (schieber_id, runde, i, y, spieler_id[dealer.folger[dealer.first]], dealer.first, dealer.operator,dealer.game[dealer.folger[dealer.first]])
+	create_game(conn, game)
+	
+	game = (schieber_id, runde, i, y, spieler_id[dealer.partner[dealer.first]], dealer.first, dealer.operator,dealer.game[dealer.partner[dealer.first]])
+	create_game(conn, game)
+	
+	game = (schieber_id, runde, i, y, spieler_id[dealer.folger[dealer.partner[dealer.first]]], dealer.first, dealer.operator,dealer.game[dealer.folger[dealer.partner[dealer.first]]])
+	create_game(conn, game)
+	
+	stich = (schieber_id, runde, i, y, spieler_id[dealer.first], dealer.stich[dealer.first])
+	create_stich(conn, stich)
+	
+	wys = (schieber_id, runde, i, spieler_id[dealer.folger[dealer.partner[dealer.first]]], dealer.first,wys)
+	create_wys(conn, wys)
+	
+	wwys = (schieber_id, runde, i, spieler_id[dealer.folger[dealer.partner[dealer.first]]], dealer.first,wwys)
+	create_wwys(conn, wwys)
+	
+	

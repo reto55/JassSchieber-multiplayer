@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(/home/reto/.claude/plugins/cache/claude-plugins-official/superpowers/5.0.7/skills/brainstorming/scripts/start-server.sh:*)",
+      "Bash(git init:*)",
+      "Bash(git -c user.email=schieber@local -c user.name=schieber commit -q -m \"chore: initial commit of existing Schieber codebase\")"
+    ]
+  }
+}
