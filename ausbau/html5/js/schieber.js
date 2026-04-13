@@ -130,3 +130,161 @@ function appendLog(text, cls = '') {
   // Keep at most 80 log lines
   while (entries.children.length > 80) entries.removeChild(entries.firstChild);
 }
+
+// ─── Message handlers ─────────────────────────────────────────────────────────
+
+function onGameStart(msg) {
+  state.hand = msg.hand;
+  state.scores = msg.scores;
+  state.targetScore = msg.target;
+  state.cardCounts = { compe: 9, compn: 9, compo: 9 };
+  state.trick = { comps: null, compn: null, compo: null, compe: null };
+  state.validCards = [];
+  state.operator = null;
+  document.getElementById('score-target').textContent = `Ziel: ${msg.target}`;
+  document.getElementById('trump-badge').classList.add('hidden');
+  document.getElementById('active-player').textContent = `Führt: ${msg.first_player}`;
+  renderAIBar();
+  renderHand();
+  renderTrickArea();
+  appendLog(`--- Neues Spiel — ${msg.first_player} führt ---`);
+}
+
+function onTrumpChosen(msg) {
+  state.operator = msg.suit;
+  const badge = document.getElementById('trump-badge');
+  badge.classList.remove('hidden');
+  document.getElementById('trump-value').textContent =
+    `${SUIT_EMOJI[msg.suit] ?? ''} ${msg.suit}`;
+  appendLog(`Trumpf: ${msg.suit} (${msg.by})`);
+}
+
+function onTrumpRequest(msg) {
+  const modal = document.getElementById('trump-modal');
+  const grid = document.getElementById('trump-options');
+  const schiebenBtn = document.getElementById('schieben-btn');
+  grid.innerHTML = '';
+
+  ['Eicheln', 'Rosen', 'Schellen', 'Schilten', 'Oben', 'Unten'].forEach(mode => {
+    const btn = document.createElement('button');
+    btn.className = 'suit-btn';
+    btn.textContent = `${SUIT_EMOJI[mode] ?? ''} ${mode}`;
+    btn.onclick = () => {
+      send({ type: 'choose_trump', suit: mode });
+      modal.classList.add('hidden');
+    };
+    grid.appendChild(btn);
+  });
+
+  schiebenBtn.classList.toggle('hidden', !msg.can_schieben);
+  schiebenBtn.onclick = () => {
+    send({ type: 'schieben' });
+    modal.classList.add('hidden');
+  };
+
+  modal.classList.remove('hidden');
+}
+
+function onWeisRequest(msg) {
+  const modal = document.getElementById('weis-modal');
+  const list = document.getElementById('weis-list');
+  list.innerHTML = '';
+  let totalPts = 0;
+
+  msg.your_weis.forEach(w => {
+    totalPts += w.points;
+    const div = document.createElement('div');
+    div.className = 'weis-item';
+    div.innerHTML =
+      `<span class="weis-name">${w.name}</span>` +
+      `<span class="weis-suit">${w.suit ?? ''}</span>` +
+      `<span class="weis-pts">${w.points} Pkt</span>`;
+    list.appendChild(div);
+  });
+
+  const announceBtn = document.getElementById('weis-announce-btn');
+  announceBtn.textContent = `✓ Ansagen (${totalPts} Pkt)`;
+  announceBtn.onclick = () => {
+    send({ type: 'declare_weis', weis: msg.your_weis.map(w => w.name), announce: true });
+    modal.classList.add('hidden');
+  };
+  document.getElementById('weis-pass-btn').onclick = () => {
+    send({ type: 'declare_weis', weis: [], announce: false });
+    modal.classList.add('hidden');
+  };
+
+  modal.classList.remove('hidden');
+}
+
+function onWeisResult(msg) {
+  state.scores.sn = msg.scores.sn;
+  state.scores.ow = msg.scores.ow;
+  renderScores();
+  if (msg.announcements.length === 0) {
+    appendLog('Kein Weis im Spiel.');
+  } else {
+    msg.announcements.forEach(a => {
+      const names = a.weis.map(w => w.name).join(', ');
+      appendLog(`${a.player} Weis: ${names} → ${a.points} Pkt`);
+    });
+  }
+}
+
+function onYourTurn(msg) {
+  state.validCards = msg.valid_cards;
+  renderHand();
+  document.getElementById('active-player').textContent = 'Am Zug: Du';
+  appendLog('Dein Zug.');
+}
+
+function onCardPlayed(msg) {
+  const key = msg.player_key;
+  state.trick[key] = msg.card;
+
+  if (key === 'comps') {
+    state.hand = state.hand.filter(c => c !== msg.card);
+    state.validCards = [];
+  } else {
+    if (state.cardCounts[key] !== undefined) state.cardCounts[key]--;
+  }
+
+  renderTrickArea();
+  renderAIBar();
+  renderHand();
+  appendLog(`${msg.player} spielt ${msg.card}.`);
+  document.getElementById('active-player').textContent = '';
+}
+
+function onTrickEnd(msg) {
+  state.scores.sn = msg.points_sn;
+  state.scores.ow = msg.points_ow;
+  renderScores();
+  appendLog(`Stich → ${msg.winner}  (SN ${msg.points_sn} / OW ${msg.points_ow})`);
+  setTimeout(() => {
+    state.trick = { comps: null, compn: null, compo: null, compe: null };
+    renderTrickArea();
+  }, 1200);
+}
+
+function onRoundEnd(msg) {
+  state.scores.sn = msg.score_sn;
+  state.scores.ow = msg.score_ow;
+  renderScores();
+  appendLog(`=== Rundenende: SN ${msg.score_sn} / OW ${msg.score_ow} ===`);
+}
+
+function onGameEnd(msg) {
+  state.scores = msg.final_scores;
+  renderScores();
+  appendLog(`🏆 Spiel vorbei! Gewinner: ${msg.winner_team}`);
+  appendLog(`Endstand: SN ${msg.final_scores.sn} / OW ${msg.final_scores.ow}`);
+}
+
+// ─── Card play action ─────────────────────────────────────────────────────────
+
+function playCard(code) {
+  if (!state.validCards.includes(code)) return;
+  state.validCards = [];
+  renderHand();
+  send({ type: 'play_card', card: code });
+}
