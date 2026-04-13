@@ -201,3 +201,36 @@ def test_initial_state_scores_accumulate():
     session.point_ow = 17
     state = session._initial_state(Play(1))
     assert state['scores'] == {'sn': 42, 'ow': 17}
+
+
+import asyncio
+from unittest.mock import AsyncMock
+
+
+def test_trump_phase_human_leads_chooses():
+    """When human (comps) leads, server asks and human responds choose_trump."""
+    session = GameSession()
+    play = Play(4)  # spiel 4 → comps leads
+
+    ws = AsyncMock()
+    ws.receive_json = AsyncMock(return_value={"type": "choose_trump", "suit": "Eicheln"})
+    asyncio.run(session._trump_phase(ws, play))
+
+    assert play.operator == "Eicheln"
+    calls = [c[0][0] for c in ws.send_json.call_args_list]
+    assert calls[0]['type'] == 'trump_request'
+    assert calls[0]['can_schieben'] is True
+    assert calls[1]['type'] == 'trump_chosen'
+    assert calls[1]['suit'] == 'Eicheln'
+
+
+def test_trump_phase_human_leads_schiebt():
+    """Human schiebt → partner Nord (AI) chooses via trumpfs()."""
+    session = GameSession()
+    play = Play(4)
+    ws = AsyncMock()
+    ws.receive_json = AsyncMock(return_value={"type": "schieben"})
+    asyncio.run(session._trump_phase(ws, play))
+
+    assert play.operator in ['Eicheln', 'Rosen', 'Schellen', 'Schilten', 'Oben', 'Unten']
+    assert play.starter == 'compn'

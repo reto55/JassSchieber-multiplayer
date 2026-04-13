@@ -161,3 +161,40 @@ class GameSession:
             "scores": {"sn": self.point_sn, "ow": self.point_ow},
             "target": self.end_game,
         }
+
+    async def _trump_phase(self, websocket, play: Play) -> None:
+        """Handle trump selection. Asks human if they are the lead or if AI schiebs to them."""
+        if play.first == 'comps':
+            # Human leads — let them choose
+            await websocket.send_json({"type": "trump_request", "can_schieben": True})
+            msg = await websocket.receive_json()
+            if msg['type'] == 'schieben':
+                play.operator = trumpfs(play.compn)
+                play.starter = 'compn'
+                chooser = 'Nord'
+            else:
+                play.operator = msg['suit']
+                play.starter = 'comps'
+                chooser = 'Du'
+        elif play.operator == 'Schieben':
+            # AI lead wants to pass — check if partner is human
+            partner = play.partner[play.first]
+            if partner == 'comps':
+                await websocket.send_json({"type": "trump_request", "can_schieben": False})
+                msg = await websocket.receive_json()
+                play.operator = msg['suit']
+                play.starter = 'comps'
+                chooser = 'Du'
+            else:
+                play.operator = trumpfs(play.__dict__[partner])
+                play.starter = partner
+                chooser = POSITION_NAMES[partner]
+        else:
+            # AI already chose — just inform client
+            chooser = POSITION_NAMES[play.first]
+
+        await websocket.send_json({
+            "type": "trump_chosen",
+            "suit": play.operator,
+            "by": chooser,
+        })
