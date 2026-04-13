@@ -35,3 +35,65 @@ def find_card_in_hand(code: str, hand: dict):
             if card_to_code(card) == code:
                 return card, suit
     return None, None
+
+
+def get_valid_cards(hand: dict, lead_suit: Optional[str], operator: str) -> list:
+    """Return card codes valid to play. lead_suit=None means player is leading."""
+    all_cards = [c for suit in SUITS for c in hand[suit]]
+
+    if lead_suit is None:
+        return [card_to_code(c) for c in all_cards]
+
+    follow_cards = hand.get(lead_suit, [])
+    if not follow_cards:
+        return [card_to_code(c) for c in all_cards]
+
+    valid = list(follow_cards)
+    # Trump Under (Bube) can always be played in a trump game
+    if operator in SUITS:
+        for c in hand.get(operator, []):
+            if c.__class__.__name__ == 'Under' and c not in valid:
+                valid.append(c)
+
+    return [card_to_code(c) for c in valid]
+
+
+def determine_trick_winner(trick: dict, first: str, operator: str, folger: dict) -> str:
+    """Return the player key who wins the trick."""
+    lead_suit = trick[first].suit
+
+    def strength(card: Card):
+        if operator in SUITS:
+            if card.suit == operator:
+                return (2, card.trumpf)
+            elif card.suit == lead_suit:
+                return (1, card.rank)
+            return (0, 0)
+        elif operator == 'Oben':
+            return (1, card.oben) if card.suit == lead_suit else (0, 0)
+        else:  # Unten
+            return (1, card.unten) if card.suit == lead_suit else (0, 0)
+
+    winner = first
+    best = strength(trick[first])
+    player = folger[first]
+    for _ in range(3):
+        s = strength(trick[player])
+        if s > best:
+            best = s
+            winner = player
+        player = folger[player]
+    return winner
+
+
+def trick_points(trick: dict, operator: str) -> int:
+    """Sum point values of all cards in the trick for the given mode."""
+    total = 0
+    for card in trick.values():
+        if operator in SUITS:
+            total += card.wtrumpf if card.suit == operator else card.wfarbe
+        elif operator == 'Oben':
+            total += card.woben
+        else:
+            total += card.wunten
+    return total
