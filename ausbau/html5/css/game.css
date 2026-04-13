@@ -176,4 +176,203 @@ a:hover {
 .cardSI7 {background-position: -560px -375px;}
 .cardSI6 {background-position: -640px -375px;}
 
+/* ─────────────────────────────────────────
+   Schieber — Wide/Compact Layout
+   ───────────────────────────────────────── */
 
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body {
+  margin: 0; padding: 0;
+  height: 100%; overflow: hidden;
+  font-family: system-ui, sans-serif;
+  background: #111; color: #ccc;
+}
+
+#game {
+  display: flex; flex-direction: column;
+  height: 100vh;
+  background: #2d5a27;
+}
+
+/* ① AI Bar */
+#ai-bar {
+  display: flex; align-items: center; gap: 12px;
+  background: #111; padding: 8px 16px;
+  border-bottom: 2px solid #333; flex-shrink: 0;
+}
+
+.ai-player { display: flex; align-items: center; gap: 8px; flex: 1; }
+.ai-avatar {
+  width: 34px; height: 34px; border-radius: 50%;
+  background: #333; border: 2px solid #555;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: bold; color: #aaa;
+}
+.ai-player.partner .ai-avatar { border-color: #3a8a3a; color: #7fc47f; }
+.ai-name { font-size: 10px; color: #aaa; margin-bottom: 3px; }
+.ai-player.partner .ai-name { color: #7fc47f; }
+.ai-cards { display: flex; gap: 1px; flex-wrap: wrap; }
+.ai-card-back {
+  width: 9px; height: 14px;
+  background: #8b0000; border: 1px solid #600; border-radius: 1px;
+}
+
+#score-panel {
+  background: #1a1a1a; border-radius: 8px;
+  padding: 6px 14px; border: 1px solid #333;
+  text-align: center; min-width: 110px; flex-shrink: 0;
+}
+.score-label { font-size: 9px; color: #666; margin-bottom: 3px; }
+.score-row { display: flex; align-items: center; justify-content: center; gap: 10px; }
+.score-team { display: flex; flex-direction: column; align-items: center; }
+.team-label { font-size: 9px; }
+.sn-label { color: #7fc47f; }
+.ow-label { color: #e88; }
+.team-score { font-size: 20px; font-weight: bold; color: #fff; line-height: 1; }
+.score-divider { width: 1px; height: 28px; background: #333; }
+.score-target { font-size: 9px; color: #666; margin-top: 3px; }
+
+/* ② Table */
+#table {
+  flex: 1; position: relative;
+  display: flex; align-items: center; justify-content: center;
+  overflow: hidden;
+}
+
+#trump-badge {
+  position: absolute; top: 10px; left: 14px;
+  background: #3a2200; border: 1px solid #a06000;
+  border-radius: 6px; padding: 5px 10px; z-index: 5;
+}
+#trump-badge.hidden { display: none; }
+.trump-label { font-size: 9px; color: #f0c050; display: block; }
+#trump-value { font-size: 12px; color: #fff; }
+
+#round-info {
+  position: absolute; top: 10px; right: 14px;
+  background: rgba(0,0,0,.4); border-radius: 6px;
+  padding: 5px 10px; font-size: 10px; color: #aaa;
+}
+
+/* ③ Trick area */
+#trick-area {
+  display: flex; flex-direction: column;
+  align-items: center; gap: 6px;
+}
+#trick-middle-row { display: flex; align-items: center; gap: 6px; }
+
+.trick-slot {
+  width: 56px; min-height: 84px;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: flex-end;
+  gap: 3px;
+}
+.trick-label { font-size: 9px; color: #666; }
+.trick-slot .card {
+  cursor: default;
+  position: relative;   /* overrides position:absolute so card stays in slot */
+}
+.trick-slot .card .face.front { display: none; }     /* hide card-back pattern */
+.trick-slot .card .face.back { transform: none; position: absolute; z-index: 1; }
+
+/* ④ Game log */
+#game-log {
+  position: absolute; bottom: 10px; right: 14px;
+  width: 200px; max-height: 160px;
+  background: rgba(0,0,0,.5); border-radius: 6px;
+  padding: 6px; overflow-y: auto; font-size: 10px;
+}
+.log-entry { padding: 1px 0; color: #aaa; }
+.log-entry.error { color: #f88; }
+
+/* ⑤ Human hand */
+#hand-area {
+  background: rgba(0,0,0,.4); border-top: 2px solid #3a5a3a;
+  padding: 10px 16px 12px; flex-shrink: 0;
+}
+#hand-label { font-size: 9px; color: #666; margin-bottom: 6px; }
+#hand-cards { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
+
+/* Hand card overrides */
+#hand-cards .card {
+  position: relative;  /* overrides position:absolute so card stays in flex flow */
+  -webkit-perspective: none; perspective: none;
+  transition: transform .15s;
+}
+/* Show card face (the .back div holds the sprite), hide the card-back design (.front) */
+#hand-cards .card .face.front { display: none; }
+#hand-cards .card .face.back { transform: none; z-index: 1; position: absolute; }
+
+#hand-cards .card.valid {
+  border: 2px solid #ffcc00 !important;
+  box-shadow: 0 0 10px #ffcc0088;
+  transform: translateY(-5px);
+  cursor: pointer;
+}
+#hand-cards .card.invalid {
+  opacity: 0.4; cursor: not-allowed;
+}
+#hand-cards .card.valid:hover { transform: translateY(-9px); }
+
+/* Modals */
+.modal {
+  position: fixed; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  z-index: 100;
+}
+.modal.hidden { display: none; }
+.modal-overlay {
+  position: absolute; inset: 0;
+  background: rgba(0,0,0,.55);
+}
+.modal-box {
+  position: relative; z-index: 1;
+  background: #1e1e1e; border-radius: 12px;
+  padding: 20px 24px; border: 1px solid #444;
+  min-width: 270px; max-width: 340px;
+}
+.modal-box h3 { color: #fff; text-align: center; margin-bottom: 14px; font-size: 15px; }
+
+/* Trump suit grid */
+.suit-grid {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 8px; margin-bottom: 10px;
+}
+.suit-btn {
+  background: #6a1a1a; color: #fff; border: none;
+  border-radius: 7px; padding: 9px 6px;
+  font-size: 12px; cursor: pointer; transition: background .15s;
+}
+.suit-btn:nth-child(5), .suit-btn:nth-child(6) { background: #1a3a7a; }
+.suit-btn:hover { filter: brightness(1.2); }
+.schieben-btn {
+  width: 100%; background: #444; color: #ccc;
+  border: none; border-radius: 7px; padding: 8px;
+  font-size: 12px; cursor: pointer; margin-top: 4px;
+}
+.schieben-btn:hover { background: #555; }
+
+/* Weis list */
+.weis-item {
+  display: flex; justify-content: space-between; align-items: center;
+  background: #2a2a2a; border-radius: 6px;
+  padding: 7px 10px; margin-bottom: 6px;
+}
+.weis-name { color: #f0c050; font-size: 12px; font-weight: bold; }
+.weis-suit { color: #aaa; font-size: 11px; }
+.weis-pts { color: #7fc47f; font-size: 12px; font-weight: bold; }
+
+.modal-actions { display: flex; gap: 8px; margin-top: 12px; }
+.btn-primary {
+  flex: 2; background: #2a6a2a; color: #fff;
+  border: none; border-radius: 7px; padding: 9px; font-size: 12px; cursor: pointer;
+}
+.btn-secondary {
+  flex: 1; background: #444; color: #ccc;
+  border: none; border-radius: 7px; padding: 9px; font-size: 12px; cursor: pointer;
+}
+.btn-primary:hover { background: #3a8a3a; }
+.btn-secondary:hover { background: #555; }
+
+.hidden { display: none !important; }
