@@ -341,3 +341,307 @@ def test_run_spiel_trick_end_includes_points_key():
         assert isinstance(msg.get('points_sn'), int), f"points_sn not int: {msg}"
         assert isinstance(msg.get('points_ow'), int), f"points_ow not int: {msg}"
         assert msg['winner_key'] in {'comps', 'compo', 'compn', 'compe'}
+
+
+# --- round_end normalization (defects D3 + D8) ----------------------------
+
+def _drive_run_spiel_and_collect(session_scores):
+    """Run a single spiel with stubbed phases; return the sent messages list.
+
+    ``session_scores`` is a (sn, ow) tuple applied to the GameSession just
+    before ``_run_spiel`` fires round_end, so the test can control the
+    round totals observable in the payload.
+    """
+    from unittest.mock import AsyncMock, patch
+
+    session = GameSession(end_game=1000)
+    ws = AsyncMock()
+
+    async def _noop_trump(self, websocket, play):
+        play.operator = 'Eicheln'
+        play.starter = 'comps'
+
+    async def _noop_weis(self, websocket, play):
+        return
+
+    sn, ow = session_scores
+    # We produce 0-point tricks and then mutate the session score right after
+    # the 9th trick but before round_end runs. We achieve that by using a
+    # side-effect-bearing fake for trick #9 specifically.
+    call_count = {'n': 0}
+
+    async def _fake_play_trick(self, websocket, play):
+        call_count['n'] += 1
+        if call_count['n'] == 9:
+            # Set the final totals immediately before round_end is emitted
+            self.point_sn = sn
+            self.point_ow = ow
+        return ('comps', 0)
+
+    with patch.object(GameSession, '_trump_phase', _noop_trump), \
+         patch.object(GameSession, '_weis_phase', _noop_weis), \
+         patch.object(GameSession, '_play_trick', _fake_play_trick), \
+         patch('ausbau.game_session.asyncio.sleep', new=AsyncMock()):
+        asyncio.run(session._run_spiel(ws, 4))
+
+    return [c[0][0] for c in ws.send_json.call_args_list]
+
+
+def test_round_end_winner_team_sn_token():
+    """round_end.winner_team is 'sn' when SN scored higher this round."""
+    # SN already leads after the last trick (comps wins trick 9 → +5 bonus → sn=105)
+    sent = _drive_run_spiel_and_collect(session_scores=(100, 50))
+    round_end = [m for m in sent if m.get('type') == 'round_end'][-1]
+    assert round_end['winner_team'] == 'sn', round_end
+
+
+def test_round_end_winner_team_ow_token():
+    """round_end.winner_team is 'ow' when OW scored higher this round."""
+    # OW started ahead; comps wins trick 9 → +5 on SN, but still less than 200
+    sent = _drive_run_spiel_and_collect(session_scores=(50, 200))
+    round_end = [m for m in sent if m.get('type') == 'round_end'][-1]
+    assert round_end['winner_team'] == 'ow', round_end
+
+
+def test_round_end_winner_team_tie_token():
+    """round_end.winner_team is 'tie' when round totals are equal."""
+    # Pre-trick-9 totals set to (95, 100); comps wins trick 9 → +5 → (100,100)
+    sent = _drive_run_spiel_and_collect(session_scores=(95, 100))
+    round_end = [m for m in sent if m.get('type') == 'round_end'][-1]
+    assert round_end['winner_team'] == 'tie', round_end
+
+
+def test_round_end_has_target_int():
+    """round_end must carry the `target` field (int) per skill contract."""
+    sent = _drive_run_spiel_and_collect(session_scores=(100, 50))
+    round_end = [m for m in sent if m.get('type') == 'round_end'][-1]
+    assert 'target' in round_end, f"round_end missing target: {round_end}"
+    assert isinstance(round_end['target'], int)
+    assert round_end['target'] == 1000  # matches GameSession(end_game=1000)
+
+
+def test_round_end_field_set_matches_skill():
+    """round_end carries exactly {type, score_sn, score_ow, winner_team, target}."""
+    sent = _drive_run_spiel_and_collect(session_scores=(100, 50))
+    round_end = [m for m in sent if m.get('type') == 'round_end'][-1]
+    assert set(round_end.keys()) == {
+        'type', 'score_sn', 'score_ow', 'winner_team', 'target'
+    }, f"unexpected round_end keys: {round_end.keys()}"
+
+
+# --- declare_weis subset selection (defect D6) ----------------------------
+
+def test_weis_phase_subset_announces_only_selected():
+    """announce=True + weis=['Dreier'] → only the Dreier is announced, Vierter dropped."""
+    from unittest.mock import AsyncMock, patch
+
+    session = GameSession()
+    play = Play(1)
+
+    human_weis = [
+        {'name': 'Dreier', 'suit': 'Eicheln', 'points': 20},
+        {'name': 'Vierter', 'suit': 'Rosen', 'points': 50},
+    ]
+
+    ws = AsyncMock()
+    ws.receive_json = AsyncMock(return_value={
+        "type": "declare_weis",
+        "weis": ["Dreier"],
+        "announce": True,
+    })
+
+    # Patch describe_weis so the HUMAN sees both, but AI players see none.
+    call_counter = {'n': 0}
+
+    def _fake_describe(combos, gleiche):
+        call_counter['n'] += 1
+        # First invocation is for the human (play.comps); rest are AI.
+        return human_weis if call_counter['n'] == 1 else []
+
+    with patch('ausbau.game_session.describe_weis', side_effect=_fake_describe):
+        asyncio.run(session._weis_phase(ws, play))
+
+    last = ws.send_json.call_args_list[-1][0][0]
+    assert last['type'] == 'weis_result'
+    sued = [a for a in last['announcements'] if a['player'] == 'Süd']
+    assert len(sued) == 1, f"expected exactly one Süd announcement: {last}"
+    names = [w['name'] for w in sued[0]['weis']]
+    assert names == ['Dreier'], f"expected only Dreier, got {names}"
+    assert sued[0]['points'] == 20
+    # Only 20 points should have been added to SN (no Vierter's 50).
+    assert session.point_sn == 20
+
+
+def test_weis_phase_empty_weis_with_announce_true_keeps_all():
+    """announce=True + missing/empty weis → legacy all-announce behavior preserved."""
+    from unittest.mock import AsyncMock, patch
+
+    session = GameSession()
+    play = Play(1)
+
+    human_weis = [
+        {'name': 'Dreier', 'suit': 'Eicheln', 'points': 20},
+        {'name': 'Vierter', 'suit': 'Rosen', 'points': 50},
+    ]
+
+    ws = AsyncMock()
+    ws.receive_json = AsyncMock(return_value={
+        "type": "declare_weis",
+        "weis": [],           # empty → announce all
+        "announce": True,
+    })
+
+    call_counter = {'n': 0}
+
+    def _fake_describe(combos, gleiche):
+        call_counter['n'] += 1
+        return human_weis if call_counter['n'] == 1 else []
+
+    with patch('ausbau.game_session.describe_weis', side_effect=_fake_describe):
+        asyncio.run(session._weis_phase(ws, play))
+
+    last = ws.send_json.call_args_list[-1][0][0]
+    sued = [a for a in last['announcements'] if a['player'] == 'Süd']
+    assert len(sued) == 1
+    names = sorted(w['name'] for w in sued[0]['weis'])
+    assert names == ['Dreier', 'Vierter'], f"expected all, got {names}"
+    assert sued[0]['points'] == 70
+    assert session.point_sn == 70
+
+
+def test_weis_phase_missing_weis_with_announce_true_keeps_all():
+    """announce=True with the `weis` key omitted entirely → announce all (legacy)."""
+    from unittest.mock import AsyncMock, patch
+
+    session = GameSession()
+    play = Play(1)
+
+    human_weis = [
+        {'name': 'Dreier', 'suit': 'Eicheln', 'points': 20},
+    ]
+
+    ws = AsyncMock()
+    ws.receive_json = AsyncMock(return_value={
+        "type": "declare_weis",
+        "announce": True,
+        # no 'weis' key at all
+    })
+
+    call_counter = {'n': 0}
+
+    def _fake_describe(combos, gleiche):
+        call_counter['n'] += 1
+        return human_weis if call_counter['n'] == 1 else []
+
+    with patch('ausbau.game_session.describe_weis', side_effect=_fake_describe):
+        asyncio.run(session._weis_phase(ws, play))
+
+    assert session.point_sn == 20
+
+
+def test_weis_phase_announce_false_announces_nothing_even_with_weis():
+    """announce=False + weis=['Dreier'] → still declines, nothing announced."""
+    from unittest.mock import AsyncMock, patch
+
+    session = GameSession()
+    play = Play(1)
+
+    human_weis = [
+        {'name': 'Dreier', 'suit': 'Eicheln', 'points': 20},
+    ]
+
+    ws = AsyncMock()
+    ws.receive_json = AsyncMock(return_value={
+        "type": "declare_weis",
+        "weis": ["Dreier"],
+        "announce": False,
+    })
+
+    call_counter = {'n': 0}
+
+    def _fake_describe(combos, gleiche):
+        call_counter['n'] += 1
+        return human_weis if call_counter['n'] == 1 else []
+
+    with patch('ausbau.game_session.describe_weis', side_effect=_fake_describe):
+        asyncio.run(session._weis_phase(ws, play))
+
+    last = ws.send_json.call_args_list[-1][0][0]
+    sued = [a for a in last['announcements'] if a['player'] == 'Süd']
+    assert sued == []
+    assert session.point_sn == 0
+
+
+def test_weis_phase_subset_with_nonexistent_name_drops_it():
+    """Names not present in offered human_weis are silently dropped; matching is exact."""
+    from unittest.mock import AsyncMock, patch
+
+    session = GameSession()
+    play = Play(1)
+
+    human_weis = [
+        {'name': 'Dreier', 'suit': 'Eicheln', 'points': 20},
+        {'name': 'Vierter', 'suit': 'Rosen', 'points': 50},
+    ]
+
+    ws = AsyncMock()
+    ws.receive_json = AsyncMock(return_value={
+        "type": "declare_weis",
+        "weis": ["Dreier", "Viererle"],  # Viererle was not offered
+        "announce": True,
+    })
+
+    call_counter = {'n': 0}
+
+    def _fake_describe(combos, gleiche):
+        call_counter['n'] += 1
+        return human_weis if call_counter['n'] == 1 else []
+
+    with patch('ausbau.game_session.describe_weis', side_effect=_fake_describe):
+        asyncio.run(session._weis_phase(ws, play))
+
+    last = ws.send_json.call_args_list[-1][0][0]
+    sued = [a for a in last['announcements'] if a['player'] == 'Süd']
+    names = [w['name'] for w in sued[0]['weis']]
+    assert names == ['Dreier'], f"expected only Dreier, got {names}"
+    assert session.point_sn == 20
+
+
+def test_game_end_winner_team_is_normalized_token():
+    """game_end.winner_team must be 'sn' | 'ow' | 'tie' — not the long strings from get_winner."""
+    from unittest.mock import AsyncMock, patch
+    session = GameSession(end_game=50)
+    session.point_sn = 60
+    session.point_ow = 30
+    ws = AsyncMock()
+
+    async def _fake_spiel(self, websocket, spiel_num):
+        return
+
+    with patch.object(GameSession, '_run_spiel', _fake_spiel):
+        asyncio.run(session.run(ws))
+
+    sent = [c[0][0] for c in ws.send_json.call_args_list]
+    game_end = [m for m in sent if m.get('type') == 'game_end']
+    assert len(game_end) == 1
+    assert game_end[0]['winner_team'] in {'sn', 'ow', 'tie'}
+    assert game_end[0]['winner_team'] == 'sn'
+    assert game_end[0]['final_scores'] == {'sn': 60, 'ow': 30}
+
+
+def test_game_end_winner_team_tie():
+    from unittest.mock import AsyncMock, patch
+    session = GameSession(end_game=50)
+    session.point_sn = 55
+    session.point_ow = 55
+    ws = AsyncMock()
+
+    async def _fake_spiel(self, websocket, spiel_num):
+        return
+
+    with patch.object(GameSession, '_run_spiel', _fake_spiel):
+        asyncio.run(session.run(ws))
+
+    sent = [c[0][0] for c in ws.send_json.call_args_list]
+    game_end = [m for m in sent if m.get('type') == 'game_end']
+    assert game_end[0]['winner_team'] == 'tie'

@@ -7,7 +7,7 @@ from Cards_refactored import (
     Play, SUITS, PLAY_MODES, Card,
     determine_trumpf, trumpfs, wiis, wiis_gleiche,
 )
-from utils.game_utils import check_game_end, get_winner
+from utils.game_utils import check_game_end
 
 SUIT_PREFIX = {'Eicheln': 'E', 'Rosen': 'R', 'Schellen': 'SE', 'Schilten': 'SI'}
 RANK_SUFFIX = {9: 'A', 8: 'K', 7: 'O', 6: 'U', 5: 'B', 4: '9', 3: '8', 2: '7', 1: '6'}
@@ -208,7 +208,17 @@ class GameSession:
             await websocket.send_json({"type": "weis_request", "your_weis": human_weis})
             msg = await websocket.receive_json()
             if msg.get('announce'):
-                weis_announce['comps'] = human_weis
+                # Subset selection per skill: if `weis` is a non-empty list,
+                # announce only the entries whose `name` is in that list.
+                # Empty / missing `weis` falls back to legacy all-announce.
+                selected = msg.get('weis')
+                if isinstance(selected, list) and selected:
+                    selected_set = set(selected)
+                    filtered = [w for w in human_weis if w['name'] in selected_set]
+                    if filtered:
+                        weis_announce['comps'] = filtered
+                else:
+                    weis_announce['comps'] = human_weis
 
         # AI players always announce if they have weis
         for player in ['compo', 'compn', 'compe']:
@@ -322,11 +332,21 @@ class GameSession:
                 "points_ow": self.point_ow,
             })
 
+        # round_end winner_team uses sn/ow/tie tokens (skill contract), not
+        # the long strings returned by utils.game_utils.get_winner. It reflects
+        # the team leading after THIS round's totals, not the game winner.
+        if self.point_sn > self.point_ow:
+            round_winner = "sn"
+        elif self.point_ow > self.point_sn:
+            round_winner = "ow"
+        else:
+            round_winner = "tie"
         await websocket.send_json({
             "type": "round_end",
             "score_sn": self.point_sn,
             "score_ow": self.point_ow,
-            "winner_team": get_winner(self.point_sn, self.point_ow),
+            "winner_team": round_winner,
+            "target": self.end_game,
         })
 
     async def run(self, websocket) -> None:
@@ -336,9 +356,15 @@ class GameSession:
             spiel_num = (spiel_num % 4) + 1
             await self._run_spiel(websocket, spiel_num)
             if check_game_end(self.point_sn, self.point_ow, self.end_game):
+                if self.point_sn > self.point_ow:
+                    game_winner = "sn"
+                elif self.point_ow > self.point_sn:
+                    game_winner = "ow"
+                else:
+                    game_winner = "tie"
                 await websocket.send_json({
                     "type": "game_end",
-                    "winner_team": get_winner(self.point_sn, self.point_ow),
+                    "winner_team": game_winner,
                     "final_scores": {"sn": self.point_sn, "ow": self.point_ow},
                 })
                 return

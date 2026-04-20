@@ -281,12 +281,30 @@ function onRoundEnd(msg) {
   state.scores.ow = msg.score_ow;
   renderScores();
   appendLog(`=== Rundenende: SN ${msg.score_sn} / OW ${msg.score_ow} ===`);
+
+  // New protocol fields (batch C):
+  //   winner_team: "sn" | "ow" | "tie" — which team led THIS round.
+  //   target: game-end target; already initialized from game_start. We do NOT
+  //   overwrite state.targetScore here; game_start is the single source of
+  //   truth for the session-stable target. msg.target is ignored on purpose
+  //   (values should match; silently trusting game_start keeps one owner).
+  if (msg.winner_team === 'sn') {
+    appendLog('Runde: Team SN');
+  } else if (msg.winner_team === 'ow') {
+    appendLog('Runde: Team OW');
+  } else if (msg.winner_team === 'tie') {
+    appendLog('Runde: Unentschieden');
+  }
 }
 
 function onGameEnd(msg) {
   state.scores = msg.final_scores;
   renderScores();
-  appendLog(`🏆 Spiel vorbei! Gewinner: ${msg.winner_team}`);
+  const teamLabel = msg.winner_team === 'sn' ? 'Team SN'
+                  : msg.winner_team === 'ow' ? 'Team OW'
+                  : msg.winner_team === 'tie' ? 'Unentschieden'
+                  : msg.winner_team;
+  appendLog(`🏆 Spiel vorbei! Gewinner: ${teamLabel}`);
   appendLog(`Endstand: SN ${msg.final_scores.sn} / OW ${msg.final_scores.ow}`);
 }
 

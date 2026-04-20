@@ -146,11 +146,13 @@ Broadcast after the 4th card of a trick. Sent before the next `your_turn` / `car
 After 9 tricks.
 ```
 { "type": "round_end",
-  "score_sn": <int>,
-  "score_ow": <int>,
-  "target": 1000 }
+  "score_sn": <int>,                // running total for SN after this round
+  "score_ow": <int>,                // running total for OW after this round
+  "winner_team": "sn"|"ow"|"tie",   // who led this round — not game winner
+  "target": 1000 }                  // game-end target, stable for the session
 ```
-Followed immediately by a fresh `game_start` unless `game_end`.
+
+`winner_team` is the team with the higher round total (or `"tie"` if equal) — it is NOT the game winner. Same token set as `game_end.winner_team` for consistency. Followed immediately by a fresh `game_start` unless a `game_end` fires first.
 
 ### `game_end`
 
@@ -188,9 +190,13 @@ Valid only when `trump_request.can_schieben` was `true`.
 ### `declare_weis`
 ```
 { "type": "declare_weis",
-  "weis": ["Dreier"],             // subset of `weis_request.your_weis`
+  "weis": ["Dreier"],             // list of Weis NAMES the client chose to announce
   "announce": true/false }        // false = decline to announce any
 ```
+
+`weis` entries are `name` values from the earlier `weis_request.your_weis` list. If `announce` is `false`, the client declines everything regardless of `weis` content. If `announce` is `true`:
+- non-empty `weis` → server announces exactly those entries (subset selection);
+- empty / missing `weis` → server announces ALL offered Weis (legacy all-or-nothing).
 
 ### `play_card`
 ```
