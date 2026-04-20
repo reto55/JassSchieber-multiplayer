@@ -60,7 +60,7 @@ The live game path is HTML5: browser ↔ `ausbau/server.py /ws` ↔ `GameSession
 
 **`farbe_lang()`** in `card_utils.py` determines a player's longest suit with priority order: Schilten > Schellen > Eicheln > Rosen.
 
-**`max_game()`** in `game_utils.py` contains the core trick-winning logic — which card beats which based on the current trump/mode. This is the most complex function in the codebase.
+**Trick-winner logic** lives in `ausbau/game_session.py::determine_trick_winner` — the live HTML5 path. Rules codified in the `schieber-game-rules` skill.
 
 ## Database Schema
 
