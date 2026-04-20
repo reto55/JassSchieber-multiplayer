@@ -9,41 +9,44 @@ This is a Python implementation of **Schieber**, a classic Swiss four-player car
 ## Commands
 
 ```bash
-# Run the game
-python play.py
+# Run the HTML5 game server
+python -m uvicorn ausbau.server:app --reload --port 8765
+# open http://localhost:8765
 
 # Run all tests
 python run_tests.py
 
 # Run a single test file
-python -m unittest tests/test_card_utils.py
-python -m unittest tests/test_game_utils.py
-python -m unittest tests/test_db_utils.py
-python -m unittest tests/test_integration.py
+python -m pytest tests/test_card_utils.py
+python -m pytest tests/test_game_utils.py
+python -m pytest tests/test_db_utils.py
+python -m pytest tests/test_game_session.py
+python -m pytest tests/test_integration.py
 ```
 
-No external dependencies — uses only Python stdlib (`sqlite3`, `datetime`, `enum`, `collections`, `random`, `json`, `time`).
+Python 3.9+ with `fastapi` + `uvicorn` for the HTML5 server; `pytest` for tests; otherwise stdlib only (`sqlite3`, `datetime`, `enum`, `collections`, `random`, `json`, `asyncio`).
 
 ## Architecture
 
-The codebase has two parallel tracks: **legacy** (original code) and **refactored** (in-progress):
-
 ```
-play.py                          ← CLI entry point
-deal_cards_refactored.py         ← GameController (game loop, round management)
-Cards_refactored.py              ← Core data structures (Card, Deck, Hand, Players, Play)
+Cards_refactored.py              ← Core data (Card subclasses, Deck, Hand, Players, Play)
 utils/
   card_utils.py                  ← Card sorting and hand manipulation
   game_utils.py                  ← Scoring, winner logic, game duration
   db_utils.py                    ← SQLite CRUD operations
 ausbau/
+  server.py                      ← FastAPI app; /ws WebSocket endpoint
+  game_session.py                ← GameSession (live game state machine for one WS connection)
+  html5/                         ← game.html + js + css + Jasskarten.png sprite sheet
   database_manager.py            ← OOP DatabaseManager with context manager
-  db_adapter.py                  ← Compatibility shim for legacy code
+  db_adapter.py                  ← Compatibility shim for legacy DB code
   db_migration.py                ← Data migration tool
 tests/                           ← Unit and integration tests
+docs/superpowers/plans/          ← HTML5 frontend plan (15 tasks, done)
+.claude/{agents,skills}/         ← Schieber build harness (see "Harness: Schieber")
 ```
 
-Legacy files (`ausbau/schieber*.py`) are kept for reference. The `ausbau/` dir contains in-progress database improvements.
+The live game path is HTML5: browser ↔ `ausbau/server.py /ws` ↔ `GameSession.run` ↔ `Play` / `Cards_refactored.py`. No CLI.
 
 ## Key Design Decisions
 
@@ -68,15 +71,10 @@ SQLite database (`schieber.db`) with tables: `schieber` (sessions), `game`, `pla
 **Done:**
 - `Cards_refactored.py` with proper Card subclasses, `Hand`, `Players`, `Play`
 - `utils/` package with `card_utils`, `game_utils`, `db_utils`
-- `GameController` in `deal_cards_refactored.py`
 - `ausbau/database_manager.py` with OOP database layer
+- `ausbau/game_session.py` + `ausbau/server.py` (HTML5 WebSocket game loop, plan in `docs/superpowers/plans/2026-04-13-schieber-html5-frontend.md` fully done)
 - Test suite in `tests/`
-
-**Still needed** (per original plan):
-- Eliminate remaining global variables
-- Standardize German/English naming
-- Add error handling
-- Improve `max_game()` readability
+- `GameState` singleton removed (E2), `max_game` readability pass (E1), naming standardisation (E3), live-path error handling (E4), legacy CLI (`play.py`, `deal_cards_refactored.py`, `GAME_FLOW_README.md`) deleted (E5).
 
 ## Harness: Schieber
 
