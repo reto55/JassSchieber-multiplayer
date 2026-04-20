@@ -240,8 +240,15 @@ class GameSession:
             "scores": {"sn": self.point_sn, "ow": self.point_ow},
         })
 
-    async def _play_trick(self, websocket, play: Play) -> str:
-        """Play one trick. Returns the winning player key."""
+    async def _play_trick(self, websocket, play: Play) -> tuple:
+        """Play one trick.
+
+        Returns a ``(winner_key, trick_points)`` tuple:
+          * ``winner_key`` — internal player key of the trick winner.
+          * ``trick_points`` — integer point value of *this* trick only
+            (needed by ``_run_spiel`` to populate the ``trick_end.points``
+            field mandated by the schieber-protocol skill).
+        """
         trick = {}
         lead_suit = None
         player = play.first
@@ -288,7 +295,7 @@ class GameSession:
             self.point_sn += pts
         else:
             self.point_ow += pts
-        return winner
+        return winner, pts
 
     async def _run_spiel(self, websocket, spiel_num: int) -> None:
         """Deal, trump, weis, then 9 tricks for one Spiel."""
@@ -298,7 +305,7 @@ class GameSession:
         await self._weis_phase(websocket, play)
 
         for trick_num in range(9):
-            winner = await self._play_trick(websocket, play)
+            winner, trick_pts = await self._play_trick(websocket, play)
             is_last = trick_num == 8
             if is_last:
                 if winner in SN_PLAYERS:
@@ -310,7 +317,8 @@ class GameSession:
                 "type": "trick_end",
                 "winner": POSITION_NAMES[winner],
                 "winner_key": winner,
-                "points_sn": self.point_sn,
+                "points": trick_pts,          # per-trick value (skill contract)
+                "points_sn": self.point_sn,   # optional running team totals
                 "points_ow": self.point_ow,
             })
 

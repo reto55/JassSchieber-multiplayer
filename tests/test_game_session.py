@@ -267,3 +267,77 @@ def test_weis_phase_human_announces_adds_points():
 
     # Human (comps) is SN team — points should have increased
     assert session.point_sn >= 20
+
+
+# --- Trick-end payload contract (defect D1) -------------------------------
+
+def _drive_single_trick(session, play, human_card_code):
+    """Run one trick with the human replying with `human_card_code`.
+    Returns the AsyncMock WebSocket so the caller can inspect sent messages.
+    """
+    from unittest.mock import AsyncMock, patch
+    ws = AsyncMock()
+    ws.receive_json = AsyncMock(return_value={"type": "play_card", "card": human_card_code})
+    # skip the AI think-pause so tests run instantly
+    with patch('ausbau.game_session.asyncio.sleep', new=AsyncMock()):
+        result = asyncio.run(session._play_trick(ws, play))
+    return ws, result
+
+
+def test_play_trick_returns_winner_and_points():
+    """_play_trick must return (winner_key, points_int) so _run_spiel can emit `points`."""
+    session = GameSession()
+    play = Play(4)  # comps leads
+    human_card = hand_to_codes(play.comps)[0]
+    ws, result = _drive_single_trick(session, play, human_card)
+
+    # New contract: return value is a (winner, pts) tuple, not just winner.
+    assert isinstance(result, tuple), f"_play_trick must return a tuple, got {type(result).__name__}"
+    assert len(result) == 2
+    winner, pts = result
+    assert winner in {'comps', 'compo', 'compn', 'compe'}
+    assert isinstance(pts, int)
+    assert pts >= 0
+
+
+def test_run_spiel_trick_end_includes_points_key():
+    """The trick_end payload must carry a `points` key with the per-trick integer value."""
+    from unittest.mock import AsyncMock, patch
+
+    session = GameSession()
+    ws = AsyncMock()
+
+    # Stub every phase except the trick loop so we can observe exactly 9 trick_end payloads.
+    async def _noop_trump(self, websocket, play):
+        play.operator = 'Eicheln'
+        play.starter = 'comps'
+
+    async def _noop_weis(self, websocket, play):
+        return
+
+    fake_trick_values = iter([7, 11, 3, 9, 4, 0, 6, 14, 2])
+
+    async def _fake_play_trick(self, websocket, play):
+        return ('comps', next(fake_trick_values))
+
+    with patch.object(GameSession, '_trump_phase', _noop_trump), \
+         patch.object(GameSession, '_weis_phase', _noop_weis), \
+         patch.object(GameSession, '_play_trick', _fake_play_trick), \
+         patch('ausbau.game_session.asyncio.sleep', new=AsyncMock()):
+        asyncio.run(session._run_spiel(ws, 4))
+
+    sent = [c[0][0] for c in ws.send_json.call_args_list]
+    trick_ends = [m for m in sent if m.get('type') == 'trick_end']
+    assert len(trick_ends) == 9, f"expected 9 trick_end messages, got {len(trick_ends)}"
+
+    expected = [7, 11, 3, 9, 4, 0, 6, 14, 2]
+    for i, msg in enumerate(trick_ends):
+        assert 'points' in msg, f"trick_end #{i} missing required `points` key: {msg}"
+        assert isinstance(msg['points'], int), f"trick_end #{i}.points is not an int: {msg}"
+        assert msg['points'] == expected[i], (
+            f"trick_end #{i}.points={msg['points']}, expected {expected[i]}"
+        )
+        # running totals remain available (skill: optional, backend still emits)
+        assert isinstance(msg.get('points_sn'), int), f"points_sn not int: {msg}"
+        assert isinstance(msg.get('points_ow'), int), f"points_ow not int: {msg}"
+        assert msg['winner_key'] in {'comps', 'compo', 'compn', 'compe'}

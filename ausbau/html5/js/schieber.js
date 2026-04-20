@@ -256,10 +256,20 @@ function onCardPlayed(msg) {
 }
 
 function onTrickEnd(msg) {
-  state.scores.sn = msg.points_sn;
-  state.scores.ow = msg.points_ow;
+  // Running team totals are still optional fields used to refresh the scoreboard.
+  if (typeof msg.points_sn === 'number') state.scores.sn = msg.points_sn;
+  if (typeof msg.points_ow === 'number') state.scores.ow = msg.points_ow;
   renderScores();
-  appendLog(`Stich → ${msg.winner}  (SN ${msg.points_sn} / OW ${msg.points_ow})`);
+
+  // Per-trick value (new required field per protocol skill). Be defensive:
+  // older backends / test harnesses may omit it, in which case we log without it.
+  const trickPts = msg.points;
+  if (typeof trickPts === 'number') {
+    appendLog(`Stich: ${msg.winner} (${trickPts} Punkte)`);
+  } else {
+    appendLog(`Stich: ${msg.winner}`);
+  }
+
   setTimeout(() => {
     state.trick = { comps: null, compn: null, compo: null, compe: null };
     renderTrickArea();
