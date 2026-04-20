@@ -40,8 +40,17 @@ First message on connection. One-shot.
 ```
 { "type": "game_start",
   "hand": ["EA","EK",...],       // 9 codes, human's cards
-  "first_player": "Süd" }        // display name of starter
+  "first_player": "Süd",         // display name of starter
+  "players": [                   // the three NON-HUMAN seats (compe, compn, compo)
+    { "name": "West", "position": "compe", "is_partner": false, "card_count": 9 },
+    { "name": "Nord", "position": "compn", "is_partner": true,  "card_count": 9 },
+    { "name": "Ost",  "position": "compo", "is_partner": false, "card_count": 9 }
+  ],
+  "scores": { "sn": <int>, "ow": <int> },  // running totals at deal time (0 for spiel 1)
+  "target": 1000 }               // game-end target score; stable for the session
 ```
+
+`players` enumerates the three AI seats only — the human (`comps`) is implicit and rendered at the bottom of the table. Each entry: `name` (display), `position` (internal key), `is_partner` (true for the human's partner, i.e. `compn`), `card_count` (cards remaining — 9 at deal, decremented client-side on `card_played`). `scores` and `target` drive the HUD.
 
 ### `trump_request`
 
@@ -66,9 +75,13 @@ Broadcast after any player (human or AI) chose trump.
 Server asks human which Weis to announce (Weis already detected server-side).
 ```
 { "type": "weis_request",
-  "your_weis": ["Dreier","50"] } // list of Weis names found
+  "your_weis": [                 // list of Weis dicts (may be empty → request is skipped)
+    { "name": "Dreier", "suit": "Eicheln", "points": 20 },
+    { "name": "Viererle", "suit": null, "points": 100 }
+  ] }
 ```
-Human replies with `declare_weis`.
+
+Each entry has `name` (German label), `suit` (suit where the sequence lives, or `null` for rank-based "Vier Gleiche"), and `points` (the Weis's own value). Human replies with `declare_weis`.
 
 ### `weis_result`
 
@@ -76,11 +89,15 @@ Broadcast after the Weis phase resolves (including scoring).
 ```
 { "type": "weis_result",
   "announcements": [
-    { "player": "Süd", "weis": ["Dreier"] },
+    { "player": "Süd",
+      "weis": [ { "name": "Dreier", "suit": "Eicheln", "points": 20 }, ... ],
+      "points": 20 },            // sum for this player's announced weis
     ...
   ],
-  "scores": { "sn": <int>, "ow": <int> } }
+  "scores": { "sn": <int>, "ow": <int> } }  // running totals AFTER weis are added
 ```
+
+`announcements[].weis` are dicts (same shape as `weis_request.your_weis` entries). `announcements[].points` is the sum for that player. Entries are ordered by seat. Players with no announced Weis are omitted. `scores` reflects totals after the winning-team's Weis points are added.
 
 ### `your_turn`
 
@@ -99,11 +116,13 @@ Broadcast whenever any player (including human) plays a card.
   "player": "Süd",                // display
   "player_key": "comps",          // internal
   "card": "EA",
-  "trick_so_far": [
+  "trick_so_far": [               // optional — cards played in the current trick so far, in play order
     { "player_key": "compn", "card": "EK" },
     ...
   ] }
 ```
+
+`trick_so_far` is optional; live clients can reconstruct the trick from the stream of `card_played` events themselves. It is intended for reconnect / observer clients that join mid-trick — when emitted, each entry represents one already-played card in this same trick and the final entry is the current card.
 
 ### `trick_end`
 
