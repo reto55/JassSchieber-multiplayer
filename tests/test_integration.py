@@ -137,7 +137,8 @@ class TestIntegration(unittest.TestCase):
         formatted_duration = format_game_duration(self.game)
         
         # Check if game is over based on points
-        pointSN = 2000
+        # pointSN has reached the target end_sum, so the game should be over.
+        pointSN = 2500
         pointOW = 1500
         is_game_over = check_game_end(pointSN, pointOW, end_sum)
         

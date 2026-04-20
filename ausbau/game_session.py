@@ -163,28 +163,63 @@ class GameSession:
         }
 
     async def _trump_phase(self, websocket, play: Play) -> None:
-        """Handle trump selection. Asks human if they are the lead or if AI schiebs to them."""
+        """Handle trump selection. Asks human if they are the lead or if AI schiebs to them.
+
+        Per the schieber-protocol skill invariant §5 ("No silent failures…
+        server responds with `error` and re-sends the most recent prompt"),
+        the human may only reply with `choose_trump` (always) or `schieben`
+        (only when the most recent `trump_request` offered `can_schieben=True`).
+        Any other message `type` is rejected with an `error` payload followed
+        by a re-send of the same `trump_request`. The loop continues until a
+        valid reply arrives. Messages that happen to carry a `suit` key but
+        the wrong `type` are NOT accepted — tightens defect D9.
+        """
         if play.first == 'comps':
-            # Human leads — let them choose
-            await websocket.send_json({"type": "trump_request", "can_schieben": True})
-            msg = await websocket.receive_json()
-            if msg['type'] == 'schieben':
-                play.operator = trumpfs(play.compn)
-                play.starter = 'compn'
-                chooser = 'Nord'
-            else:
-                play.operator = msg['suit']
-                play.starter = 'comps'
-                chooser = 'Du'
+            # Human leads — choose_trump or schieben both allowed.
+            prompt = {"type": "trump_request", "can_schieben": True}
+            await websocket.send_json(prompt)
+            while True:
+                msg = await websocket.receive_json()
+                mtype = msg.get('type')
+                if mtype == 'schieben':
+                    play.operator = trumpfs(play.compn)
+                    play.starter = 'compn'
+                    chooser = 'Nord'
+                    break
+                if mtype == 'choose_trump' and 'suit' in msg:
+                    play.operator = msg['suit']
+                    play.starter = 'comps'
+                    chooser = 'Du'
+                    break
+                await websocket.send_json({
+                    "type": "error",
+                    "message": (
+                        f"Erwartet: 'choose_trump' oder 'schieben', erhalten: {mtype!r}."
+                    ),
+                })
+                await websocket.send_json(prompt)
         elif play.operator == 'Schieben':
             # AI lead wants to pass — check if partner is human
             partner = play.partner[play.first]
             if partner == 'comps':
-                await websocket.send_json({"type": "trump_request", "can_schieben": False})
-                msg = await websocket.receive_json()
-                play.operator = msg['suit']
-                play.starter = 'comps'
-                chooser = 'Du'
+                # Post-schieben: human must choose_trump; schieben is NOT allowed.
+                prompt = {"type": "trump_request", "can_schieben": False}
+                await websocket.send_json(prompt)
+                while True:
+                    msg = await websocket.receive_json()
+                    mtype = msg.get('type')
+                    if mtype == 'choose_trump' and 'suit' in msg:
+                        play.operator = msg['suit']
+                        play.starter = 'comps'
+                        chooser = 'Du'
+                        break
+                    await websocket.send_json({
+                        "type": "error",
+                        "message": (
+                            f"Erwartet: 'choose_trump', erhalten: {mtype!r}."
+                        ),
+                    })
+                    await websocket.send_json(prompt)
             else:
                 play.operator = trumpfs(play.__dict__[partner])
                 play.starter = partner

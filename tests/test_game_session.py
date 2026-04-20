@@ -645,3 +645,126 @@ def test_game_end_winner_team_tie():
     sent = [c[0][0] for c in ws.send_json.call_args_list]
     game_end = [m for m in sent if m.get('type') == 'game_end']
     assert game_end[0]['winner_team'] == 'tie'
+
+
+# --- D9: trump-phase message-type discriminator ---------------------------
+
+def test_trump_phase_rejects_invalid_type_then_accepts_choose_trump():
+    """Human sends wrong `type` during trump prompt → server errors + re-prompts; valid reply still wins."""
+    from unittest.mock import AsyncMock
+    session = GameSession()
+    play = Play(4)  # comps leads
+
+    ws = AsyncMock()
+    # First message has bogus type (note: it still carries a `suit` key, which
+    # the OLD permissive branch would have accepted silently). Second is valid.
+    ws.receive_json = AsyncMock(side_effect=[
+        {"type": "play_card", "card": "EA", "suit": "Schellen"},
+        {"type": "choose_trump", "suit": "Eicheln"},
+    ])
+    asyncio.run(session._trump_phase(ws, play))
+
+    # operator must reflect the VALID message, not the injected bogus suit.
+    assert play.operator == "Eicheln"
+    assert play.starter == 'comps'
+
+    sent = [c[0][0] for c in ws.send_json.call_args_list]
+    types = [m['type'] for m in sent]
+
+    # Exactly one error, two trump_request prompts (initial + re-prompt), one trump_chosen.
+    assert types.count('error') == 1, f"expected 1 error, sequence was: {types}"
+    assert types.count('trump_request') == 2, f"expected 2 trump_request, sequence was: {types}"
+    assert types.count('trump_chosen') == 1
+    # Ordering: trump_request, error, trump_request, trump_chosen.
+    assert types == ['trump_request', 'error', 'trump_request', 'trump_chosen'], types
+    # Re-prompt must carry can_schieben=True (same prompt as the initial one).
+    assert sent[2]['can_schieben'] is True
+
+
+def test_trump_phase_rejects_schieben_when_disallowed():
+    """AI schiebs to human partner — `schieben` from human is invalid; server errors + re-prompts."""
+    from unittest.mock import AsyncMock
+    session = GameSession()
+    # Spiel 2 → compn leads. Force the post-schieben branch where partner == comps.
+    play = Play(2)
+    play.operator = 'Schieben'
+
+    ws = AsyncMock()
+    ws.receive_json = AsyncMock(side_effect=[
+        {"type": "schieben"},  # not allowed: can_schieben was False
+        {"type": "choose_trump", "suit": "Rosen"},
+    ])
+    asyncio.run(session._trump_phase(ws, play))
+
+    assert play.operator == "Rosen"
+    assert play.starter == 'comps'
+
+    sent = [c[0][0] for c in ws.send_json.call_args_list]
+    types = [m['type'] for m in sent]
+    assert types.count('error') == 1, types
+    assert types.count('trump_request') == 2, types
+    # re-prompt carries can_schieben=False (schieben not permitted here)
+    trump_requests = [m for m in sent if m['type'] == 'trump_request']
+    assert all(tr['can_schieben'] is False for tr in trump_requests), trump_requests
+
+
+def test_trump_phase_rejects_invalid_type_in_post_schieben_branch():
+    """Post-schieben branch (partner==comps): non-choose_trump messages are rejected."""
+    from unittest.mock import AsyncMock
+    session = GameSession()
+    play = Play(2)
+    play.operator = 'Schieben'
+
+    ws = AsyncMock()
+    ws.receive_json = AsyncMock(side_effect=[
+        {"type": "play_card", "card": "EA"},  # wrong type
+        {"type": "choose_trump", "suit": "Schilten"},
+    ])
+    asyncio.run(session._trump_phase(ws, play))
+
+    assert play.operator == "Schilten"
+    sent = [c[0][0] for c in ws.send_json.call_args_list]
+    types = [m['type'] for m in sent]
+    assert types == ['trump_request', 'error', 'trump_request', 'trump_chosen'], types
+
+
+def test_trump_phase_loops_on_repeated_invalid_input():
+    """Multiple invalid messages in a row all get error + re-prompt until valid arrives."""
+    from unittest.mock import AsyncMock
+    session = GameSession()
+    play = Play(4)
+
+    ws = AsyncMock()
+    ws.receive_json = AsyncMock(side_effect=[
+        {"type": "play_card", "card": "EA"},
+        {"type": "declare_weis", "announce": True},
+        {"type": "garbage"},
+        {"type": "choose_trump", "suit": "Rosen"},
+    ])
+    asyncio.run(session._trump_phase(ws, play))
+
+    assert play.operator == "Rosen"
+    sent = [c[0][0] for c in ws.send_json.call_args_list]
+    types = [m['type'] for m in sent]
+    assert types.count('error') == 3, types
+    assert types.count('trump_request') == 4, types  # initial + 3 re-prompts
+    assert types[-1] == 'trump_chosen'
+
+
+def test_trump_phase_schieben_still_works_when_allowed():
+    """Regression: valid `schieben` in the leading branch must still be honored."""
+    from unittest.mock import AsyncMock
+    session = GameSession()
+    play = Play(4)
+
+    ws = AsyncMock()
+    ws.receive_json = AsyncMock(return_value={"type": "schieben"})
+    asyncio.run(session._trump_phase(ws, play))
+
+    assert play.starter == 'compn'  # partner takes over after schieben
+    # operator set by AI partner via trumpfs()
+    assert play.operator in ['Eicheln', 'Rosen', 'Schellen', 'Schilten', 'Oben', 'Unten']
+    sent = [c[0][0] for c in ws.send_json.call_args_list]
+    types = [m['type'] for m in sent]
+    # No errors on the happy path.
+    assert 'error' not in types, types
