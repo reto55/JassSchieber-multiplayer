@@ -7,3 +7,7 @@ __pycache__/
 .venv/
 venv/
 .DS_Store
+
+# harness workspace (intermediate agent artifacts)
+_workspace/
+_workspace_prev/

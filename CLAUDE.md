@@ -77,3 +77,19 @@ SQLite database (`schieber.db`) with tables: `schieber` (sessions), `game`, `pla
 - Standardize German/English naming
 - Add error handling
 - Improve `max_game()` readability
+
+## Harness: Schieber
+
+**Goal:** Build, verify, and finish the Schieber HTML5 game (plan in `docs/superpowers/plans/2026-04-13-schieber-html5-frontend.md`) via a coordinated agent team.
+
+**Trigger:** For any Schieber implementation / testing / fixing / refactoring work, invoke the `schieber-build` skill. The skill orchestrates `schieber-backend`, `schieber-frontend`, `schieber-qa`, `schieber-reviewer`. Pure lookup questions (game rules, WebSocket field meaning) can be answered directly by reading the `schieber-game-rules` / `schieber-protocol` skill.
+
+**Variable conventions added by harness:**
+- Shared intermediate artifacts live in `_workspace/` (gitignored via patterns like `_workspace/`).
+- Protocol changes go to `.claude/skills/schieber-protocol/SKILL.md` BEFORE code changes.
+- Game-rule questions resolve to `.claude/skills/schieber-game-rules/SKILL.md`.
+
+**Variation ledger:**
+| Date | Change | Target | Reason |
+|------|--------|--------|--------|
+| 2026-04-20 | Initial harness (backend, frontend, qa, reviewer agents; schieber-build orchestrator; schieber-protocol and schieber-game-rules skills) | whole harness | Finish 15-task HTML5 plan with coordinated roles and cross-boundary QA |
