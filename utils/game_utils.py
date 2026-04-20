@@ -118,147 +118,94 @@ def get_next_player(current_player, player_order):
     """
     return player_order.get(current_player)
 
+def _card_strength(card, operator):
+    """Return the ``(value, suit)``-pair used to rank a single card.
+
+    ``value`` is the rank-in-mode that ``max_game`` puts at position 0 of its
+    ``(value, player, suit)`` result tuple:
+
+      * Trump game, trump card        → ``card.trumpf``
+      * Trump game, non-trump card    → ``card.rank``
+      * ``Oben`` mode                 → ``card.oben``
+      * ``Unten`` mode                → ``card.unten``
+    """
+    if operator in ('Oben', 'Unten'):
+        return card.oben if operator == 'Oben' else card.unten
+    if card.suit == operator:
+        return card.trumpf
+    return card.rank
+
+
+def _stronger_of(current, challenger, operator):
+    """Return whichever of two ``(value, player, suit)`` tuples wins the trick.
+
+    Mirrors the trick-resolution rules (see ``schieber-game-rules`` skill):
+
+      * Trump game, suits differ: any card of ``operator`` beats a non-trump.
+        Two non-trump suits → ``current`` holds (lead-suit wins over sluff).
+      * Same suit (or trump mode Oben/Unten): higher rank-in-mode wins.
+      * Oben/Unten, suits differ: ``current`` holds — off-suit cannot win.
+    """
+    cur_val, _, cur_suit = current
+    new_val, _, new_suit = challenger
+
+    if cur_suit == new_suit:
+        return challenger if int(new_val) > int(cur_val) else current
+
+    # Suits differ: only a trump can overtake in a trump game; otherwise hold.
+    if operator not in ('Oben', 'Unten') and new_suit == operator:
+        return challenger
+    return current
+
+
+def _apply_card_side_effects(dealer, player, card):
+    """Record legacy-path bookkeeping: ``lastf`` and ``farben`` blanking."""
+    dealer.lastf[player] = card.suit
+    dealer.farben[card.suit][card.rank] = None
+
+
+def _play_order(dealer, first, count):
+    """Return the list of player keys in turn order, starting from ``first``."""
+    order = [first]
+    for _ in range(count - 1):
+        order.append(dealer.folger[order[-1]])
+    return order
+
+
 def max_game(dealer, operator, first, game):
-    """
-    Determine the highest card in the current game state.
-    
-    This function is called before each move and from max_kard.
-    It sets played cards in the farben dictionary to None.
-    It returns the current highest card with player and suit information.
-    It sets lastf[first] to the suit of the first card.
-    
+    """Determine the leading card/player in the trick so far.
+
+    Called before each move (and from ``max_kard``). Walks the players in
+    turn order starting at ``first`` through whichever of 1–4 of them have a
+    card in ``game[player]``, folding the running winner via ``_stronger_of``.
+
+    Side effects (preserved for the legacy path): ``dealer.lastf[p]`` is set
+    to each played card's suit, and ``dealer.farben[suit][rank]`` is blanked.
+
     Args:
-        dealer: The dealer object
-        operator: Trump suit or game mode
-        first: First player
-        game: Current game state
-        
+        dealer: ``Play`` (or compatible) object — supplies ``folger``,
+            ``lastf``, ``farben``.
+        operator: Trump suit (``'Eicheln'|'Rosen'|'Schellen'|'Schilten'``) or
+            ``'Oben'`` / ``'Unten'``.
+        first: Player key who led the trick.
+        game: ``{player: [card] | []}`` — the cards played so far.
+
     Returns:
-        Highest card information
+        ``(value, player, suit)`` of the currently winning card, or ``None``
+        if no one has played yet.
     """
-    dealer.lastf[first] = dealer.game[first][0].suit
-    
-    def game1(operator, first, game):
-        if operator != 'Unten' and operator != 'Oben':
-            if game[first][0].suit == operator:
-                max_ = (game[first][0].trumpf, first, game[first][0].suit)
-                dealer.farben[game[first][0].suit][game[first][0].rank] = None
-                return max_
-            else:
-                max_ = (game[first][0].rank, first, game[first][0].suit)
-                dealer.farben[game[first][0].suit][game[first][0].rank] = None
-                return max_
-        elif operator == 'Oben':
-            max_ = (game[first][0].oben, first, game[first][0].suit)
-            dealer.farben[game[first][0].suit][game[first][0].rank] = None
-            return max_
-        elif operator == 'Unten':
-            max_ = (game[first][0].unten, first, game[first][0].suit)
-            dealer.farben[game[first][0].suit][game[first][0].rank] = None
-            return max_
-
-    def game2(operator, first, game):
-        dealer.lastf[dealer.folger[first]] = dealer.game[dealer.folger[first]][0].suit
-        gross = list()
-        dealer.farben[game[dealer.folger[first]][0].suit][game[dealer.folger[first]][0].rank] = None
-        gama = game.copy()
-        gamb = game.copy()
-        gama[dealer.folger[first]] = ''
-        gamb[first] = ''
-        gross.append(game1(operator=operator, first=first, game=gama))
-        gross.append(game1(operator=operator, first=dealer.folger[first], game=gamb))
-        
-        if (gross[1][2] != gross[0][2]) and (operator != 'Unten' and 'Oben' != operator):
-            if gross[0][2] != operator and gross[1][2] != operator:
-                max_ = gross[0]
-            elif gross[0][2] != operator and gross[1][2] == operator:
-                max_ = gross[1]
-            elif gross[0][2] == operator and gross[1][2] != operator:
-                max_ = gross[0]
-        elif (gross[1][2] == gross[0][2]) and (operator != 'Unten' and 'Oben' != operator):
-            max_ = max(gross, key=lambda xy: int(xy[0]))
-        elif (gross[1][2] == gross[0][2]) and (operator == 'Unten' or 'Oben' == operator):
-            max_ = max(gross, key=lambda xy: int(xy[0]))
-        elif (gross[1][2] != gross[0][2]) and (operator == 'Unten' or 'Oben' == operator):
-            max_ = gross[0]
-            
-        return max_
-
-    def game3(operator, first, game):
-        dealer.lastf[dealer.partner[first]] = dealer.game[dealer.partner[first]][0].suit
-        gross = list()
-        dealer.farben[game[dealer.partner[first]][0].suit][game[dealer.partner[first]][0].rank] = None
-        gama = game.copy()
-        gamb = game.copy()
-        gamc = game.copy()
-        gama[dealer.partner[first]] = ''
-        gamb[first] = ''
-        gamc[dealer.folger[first]] = ''
-        
-        # Calculate max for first and partner
-        max_first_partner = game2(operator=operator, first=first, game=gama)
-        
-        # Calculate max for partner
-        gross.append(max_first_partner)
-        gross.append(game1(operator=operator, first=dealer.partner[first], game=gamb))
-        
-        if (gross[1][2] != gross[0][2]) and (operator != 'Unten' and 'Oben' != operator):
-            if gross[0][2] != operator and gross[1][2] != operator:
-                max_ = gross[0]
-            elif gross[0][2] != operator and gross[1][2] == operator:
-                max_ = gross[1]
-            elif gross[0][2] == operator and gross[1][2] != operator:
-                max_ = gross[0]
-        elif (gross[1][2] == gross[0][2]) and (operator != 'Unten' and 'Oben' != operator):
-            max_ = max(gross, key=lambda xy: int(xy[0]))
-        elif (gross[1][2] == gross[0][2]) and (operator == 'Unten' or 'Oben' == operator):
-            max_ = max(gross, key=lambda xy: int(xy[0]))
-        elif (gross[1][2] != gross[0][2]) and (operator == 'Unten' or 'Oben' == operator):
-            max_ = gross[0]
-            
-        return max_
-
-    def game4(operator, first, game):
-        dealer.lastf[dealer.folger[dealer.partner[first]]] = dealer.game[dealer.folger[dealer.partner[first]]][0].suit
-        gross = list()
-        dealer.farben[game[dealer.folger[dealer.partner[first]]][0].suit][game[dealer.folger[dealer.partner[first]]][0].rank] = None
-        gama = game.copy()
-        gamb = game.copy()
-        gama[dealer.folger[dealer.partner[first]]] = ''
-        
-        # Calculate max for first three players
-        max_first_three = game3(operator=operator, first=first, game=gama)
-        
-        # Calculate max for all four players
-        gross.append(max_first_three)
-        gross.append(game1(operator=operator, first=dealer.folger[dealer.partner[first]], game=gamb))
-        
-        if (gross[1][2] != gross[0][2]) and (operator != 'Unten' and 'Oben' != operator):
-            if gross[0][2] != operator and gross[1][2] != operator:
-                max_ = gross[0]
-            elif gross[0][2] != operator and gross[1][2] == operator:
-                max_ = gross[1]
-            elif gross[0][2] == operator and gross[1][2] != operator:
-                max_ = gross[0]
-        elif (gross[1][2] == gross[0][2]) and (operator != 'Unten' and 'Oben' != operator):
-            max_ = max(gross, key=lambda xy: int(xy[0]))
-        elif (gross[1][2] == gross[0][2]) and (operator == 'Unten' or 'Oben' == operator):
-            max_ = max(gross, key=lambda xy: int(xy[0]))
-        elif (gross[1][2] != gross[0][2]) and (operator == 'Unten' or 'Oben' == operator):
-            max_ = gross[0]
-            
-        return max_
-
-    # Process based on number of players with cards
-    players_with_cards = sum(1 for p in game.values() if p)
-    
-    if players_with_cards == 1:
-        return game1(operator, first, game)
-    elif players_with_cards == 2:
-        return game2(operator, first, game)
-    elif players_with_cards == 3:
-        return game3(operator, first, game)
-    elif players_with_cards == 4:
-        return game4(operator, first, game)
-    else:
+    played = [p for p in _play_order(dealer, first, 4) if game.get(p)]
+    if not played:
         return None
+
+    lead = game[played[0]][0]
+    _apply_card_side_effects(dealer, played[0], lead)
+    best = (_card_strength(lead, operator), played[0], lead.suit)
+
+    for player in played[1:]:
+        card = game[player][0]
+        _apply_card_side_effects(dealer, player, card)
+        challenger = (_card_strength(card, operator), player, card.suit)
+        best = _stronger_of(best, challenger, operator)
+
+    return best

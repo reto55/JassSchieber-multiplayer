@@ -11,7 +11,11 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 from utils.game_utils import (
     dauergame, format_game_duration, calculate_points,
-    check_game_end, get_winner, get_next_player
+    check_game_end, get_winner, get_next_player, max_game
+)
+from Cards_refactored import (
+    Ass, Koenig, Ober, Under, Banner, Neun, Acht, Sieben, Sechs, SUITS,
+    game_state,
 )
 
 
@@ -151,6 +155,290 @@ class TestGameUtils(unittest.TestCase):
         
         # Test with non-existent player
         self.assertIsNone(get_next_player("invalid", player_order), "Non-existent player should return None")
+
+
+class _FakeDealer:
+    """Minimal stand-in for ``Play`` for exercising ``max_game``.
+
+    Only the attributes that ``max_game`` touches are populated:
+    ``game``, ``folger``, ``partner``, ``lastf``, ``farben``.
+    """
+
+    def __init__(self, game):
+        # ``game`` maps player key -> list containing the played card (or [] if not played).
+        self.game = game
+        self.folger = {
+            'comps': 'compo', 'compo': 'compn',
+            'compn': 'compe', 'compe': 'comps',
+        }
+        self.partner = {
+            'comps': 'compn', 'compn': 'comps',
+            'compo': 'compe', 'compe': 'compo',
+        }
+        self.lastf = {p: '' for p in ('comps', 'compo', 'compn', 'compe')}
+        self.farben = {
+            s: [game_state.card_attributes[y] for y in range(1, 11)] for s in SUITS
+        }
+
+
+def _trick_from_plays(first, plays):
+    """Build a ``dealer.game``-shaped dict from a list of (player, card) plays.
+
+    ``plays`` is given in turn order starting with ``first``. Players who have
+    not played yet receive an empty list (signalling no card). This mirrors the
+    state of ``dealer.game`` at the moment ``max_game`` is called for
+    1/2/3/4-player scenarios.
+    """
+    game = {p: [] for p in ('comps', 'compo', 'compn', 'compe')}
+    for player, card in plays:
+        game[player] = [card]
+    return game
+
+
+class TestMaxGame(unittest.TestCase):
+    """Exhaustive branch coverage for ``max_game`` (trick-winner logic).
+
+    Covers 1/2/3/4-player states × {trump, Oben, Unten} × {lead-suit, off-suit}.
+    Also asserts the two side effects ``max_game`` relies on:
+
+      * ``dealer.lastf[player]`` gets set to the suit each player's card was.
+      * ``dealer.farben[suit][rank]`` of each played card becomes ``None``.
+    """
+
+    # --- 1-player (just the leader has played) ---
+
+    def test_1p_trump_lead_is_trump_suit(self):
+        card = Ass(9, 'Eicheln')
+        game = _trick_from_plays('comps', [('comps', card)])
+        dealer = _FakeDealer(game)
+        val, winner, suit = max_game(dealer, 'Eicheln', 'comps', game)
+        self.assertEqual(winner, 'comps')
+        self.assertEqual(suit, 'Eicheln')
+        # trump game, lead is trump → value is trumpf rank (Ass trumpf=16)
+        self.assertEqual(val, 16)
+        self.assertEqual(dealer.lastf['comps'], 'Eicheln')
+        # max_game indexes ``farben[suit]`` by ``card.rank`` directly (1..9).
+        self.assertIsNone(dealer.farben['Eicheln'][card.rank])
+
+    def test_1p_trump_lead_is_non_trump(self):
+        card = Ass(9, 'Rosen')
+        game = _trick_from_plays('comps', [('comps', card)])
+        dealer = _FakeDealer(game)
+        val, winner, suit = max_game(dealer, 'Eicheln', 'comps', game)
+        self.assertEqual(winner, 'comps')
+        self.assertEqual(suit, 'Rosen')
+        # non-trump lead in trump game → value is base rank (Ass rank=9)
+        self.assertEqual(val, 9)
+
+    def test_1p_oben_mode(self):
+        card = Koenig(8, 'Rosen')
+        game = _trick_from_plays('comps', [('comps', card)])
+        dealer = _FakeDealer(game)
+        val, winner, suit = max_game(dealer, 'Oben', 'comps', game)
+        self.assertEqual(winner, 'comps')
+        self.assertEqual(val, 8)  # Koenig.oben = 8
+
+    def test_1p_unten_mode(self):
+        card = Sechs(1, 'Rosen')
+        game = _trick_from_plays('comps', [('comps', card)])
+        dealer = _FakeDealer(game)
+        val, winner, suit = max_game(dealer, 'Unten', 'comps', game)
+        self.assertEqual(winner, 'comps')
+        self.assertEqual(val, 9)  # Sechs.unten = 9 (highest in Unten)
+
+    # --- 2-player ---
+
+    def test_2p_trump_trump_beats_lead_suit(self):
+        # Leader plays Ass of Rosen (lead), follower plays 6 of Eicheln (trump).
+        lead = Ass(9, 'Rosen')
+        trump = Sechs(1, 'Eicheln')
+        game = _trick_from_plays('comps', [('comps', lead), ('compo', trump)])
+        dealer = _FakeDealer(game)
+        _, winner, suit = max_game(dealer, 'Eicheln', 'comps', game)
+        self.assertEqual(winner, 'compo')
+        self.assertEqual(suit, 'Eicheln')
+
+    def test_2p_trump_lead_suit_higher_wins(self):
+        # Both play lead suit; higher rank wins.
+        lead = Koenig(8, 'Rosen')
+        follow = Ass(9, 'Rosen')
+        game = _trick_from_plays('comps', [('comps', lead), ('compo', follow)])
+        dealer = _FakeDealer(game)
+        _, winner, suit = max_game(dealer, 'Eicheln', 'comps', game)
+        self.assertEqual(winner, 'compo')
+        self.assertEqual(suit, 'Rosen')
+
+    def test_2p_trump_lead_suit_lower_loses(self):
+        lead = Ass(9, 'Rosen')
+        follow = Koenig(8, 'Rosen')
+        game = _trick_from_plays('comps', [('comps', lead), ('compo', follow)])
+        dealer = _FakeDealer(game)
+        _, winner, _ = max_game(dealer, 'Eicheln', 'comps', game)
+        self.assertEqual(winner, 'comps')
+
+    def test_2p_trump_off_suit_non_trump_cannot_win(self):
+        # Follower sluffs a third suit — cannot beat the lead.
+        lead = Sechs(1, 'Rosen')
+        off = Ass(9, 'Schellen')
+        game = _trick_from_plays('comps', [('comps', lead), ('compo', off)])
+        dealer = _FakeDealer(game)
+        _, winner, _ = max_game(dealer, 'Eicheln', 'comps', game)
+        self.assertEqual(winner, 'comps')
+
+    def test_2p_oben_off_suit_cannot_win(self):
+        lead = Sechs(1, 'Rosen')
+        off = Ass(9, 'Schellen')
+        game = _trick_from_plays('comps', [('comps', lead), ('compo', off)])
+        dealer = _FakeDealer(game)
+        _, winner, _ = max_game(dealer, 'Oben', 'comps', game)
+        self.assertEqual(winner, 'comps')
+
+    def test_2p_oben_lead_suit_higher_wins(self):
+        lead = Koenig(8, 'Rosen')
+        follow = Ass(9, 'Rosen')
+        game = _trick_from_plays('comps', [('comps', lead), ('compo', follow)])
+        dealer = _FakeDealer(game)
+        _, winner, _ = max_game(dealer, 'Oben', 'comps', game)
+        self.assertEqual(winner, 'compo')
+
+    def test_2p_unten_sechs_beats_ass(self):
+        # In Unten, Sechs has unten=9 (highest), Ass has unten=1 (lowest).
+        lead = Ass(9, 'Rosen')
+        follow = Sechs(1, 'Rosen')
+        game = _trick_from_plays('comps', [('comps', lead), ('compo', follow)])
+        dealer = _FakeDealer(game)
+        _, winner, _ = max_game(dealer, 'Unten', 'comps', game)
+        self.assertEqual(winner, 'compo')
+
+    def test_2p_sets_lastf_for_both_players(self):
+        lead = Ass(9, 'Rosen')
+        follow = Koenig(8, 'Eicheln')
+        game = _trick_from_plays('comps', [('comps', lead), ('compo', follow)])
+        dealer = _FakeDealer(game)
+        max_game(dealer, 'Eicheln', 'comps', game)
+        self.assertEqual(dealer.lastf['comps'], 'Rosen')
+        self.assertEqual(dealer.lastf['compo'], 'Eicheln')
+
+    # --- 3-player ---
+
+    def test_3p_trump_trumps_another_winning_lead(self):
+        lead = Ass(9, 'Rosen')
+        follower = Koenig(8, 'Rosen')  # higher lead-suit card would win so far
+        partner_card = Sechs(1, 'Eicheln')  # but partner plays trump
+        game = _trick_from_plays(
+            'comps',
+            [('comps', lead), ('compo', follower), ('compn', partner_card)],
+        )
+        dealer = _FakeDealer(game)
+        _, winner, suit = max_game(dealer, 'Eicheln', 'comps', game)
+        self.assertEqual(winner, 'compn')
+        self.assertEqual(suit, 'Eicheln')
+
+    def test_3p_trump_higher_trump_overtakes(self):
+        # comps leads Rosen, compo trumps with Eicheln low, compn overtrumps.
+        lead = Ass(9, 'Rosen')
+        t1 = Sechs(1, 'Eicheln')  # trumpf=10
+        t2 = Under(6, 'Eicheln')  # trumpf=18 (highest trump)
+        game = _trick_from_plays(
+            'comps', [('comps', lead), ('compo', t1), ('compn', t2)]
+        )
+        dealer = _FakeDealer(game)
+        _, winner, _ = max_game(dealer, 'Eicheln', 'comps', game)
+        self.assertEqual(winner, 'compn')
+
+    def test_3p_oben_running_max_among_lead_suit(self):
+        a = Neun(4, 'Rosen')
+        b = Banner(5, 'Rosen')
+        c = Ober(7, 'Rosen')
+        game = _trick_from_plays(
+            'comps', [('comps', a), ('compo', b), ('compn', c)]
+        )
+        dealer = _FakeDealer(game)
+        _, winner, _ = max_game(dealer, 'Oben', 'comps', game)
+        self.assertEqual(winner, 'compn')
+
+    def test_3p_unten_lowest_oben_wins(self):
+        # Sechs has unten=9 → highest. Others Sieben=8, Acht=7.
+        sechs = Sechs(1, 'Rosen')
+        sieben = Sieben(2, 'Rosen')
+        acht = Acht(3, 'Rosen')
+        game = _trick_from_plays(
+            'comps', [('comps', acht), ('compo', sieben), ('compn', sechs)]
+        )
+        dealer = _FakeDealer(game)
+        _, winner, _ = max_game(dealer, 'Unten', 'comps', game)
+        self.assertEqual(winner, 'compn')
+
+    # --- 4-player ---
+
+    def test_4p_trump_highest_trump_wins(self):
+        lead = Ass(9, 'Rosen')
+        other = Koenig(8, 'Rosen')
+        t_low = Sechs(1, 'Eicheln')
+        t_high = Neun(4, 'Eicheln')  # trumpf=17 (2nd-highest trump)
+        game = _trick_from_plays(
+            'comps',
+            [('comps', lead), ('compo', t_low),
+             ('compn', other), ('compe', t_high)],
+        )
+        dealer = _FakeDealer(game)
+        _, winner, suit = max_game(dealer, 'Eicheln', 'comps', game)
+        self.assertEqual(winner, 'compe')
+        self.assertEqual(suit, 'Eicheln')
+
+    def test_4p_oben_highest_lead_suit_wins(self):
+        cards = [Neun(4, 'Rosen'), Banner(5, 'Rosen'),
+                 Ober(7, 'Rosen'), Ass(9, 'Rosen')]
+        players = ['comps', 'compo', 'compn', 'compe']
+        game = _trick_from_plays('comps', list(zip(players, cards)))
+        dealer = _FakeDealer(game)
+        _, winner, _ = max_game(dealer, 'Oben', 'comps', game)
+        self.assertEqual(winner, 'compe')  # Ass highest
+
+    def test_4p_unten_sechs_wins(self):
+        cards = [Ass(9, 'Rosen'), Koenig(8, 'Rosen'),
+                 Ober(7, 'Rosen'), Sechs(1, 'Rosen')]
+        players = ['comps', 'compo', 'compn', 'compe']
+        game = _trick_from_plays('comps', list(zip(players, cards)))
+        dealer = _FakeDealer(game)
+        _, winner, _ = max_game(dealer, 'Unten', 'comps', game)
+        self.assertEqual(winner, 'compe')
+
+    def test_4p_all_off_suit_leader_holds(self):
+        # Oben mode, leader plays a low lead-suit card; everyone else sluffs.
+        lead = Sechs(1, 'Rosen')
+        cards = [lead, Ass(9, 'Eicheln'), Ass(9, 'Schellen'), Ass(9, 'Schilten')]
+        players = ['comps', 'compo', 'compn', 'compe']
+        game = _trick_from_plays('comps', list(zip(players, cards)))
+        dealer = _FakeDealer(game)
+        _, winner, _ = max_game(dealer, 'Oben', 'comps', game)
+        self.assertEqual(winner, 'comps')
+
+    def test_4p_side_effects_all_players(self):
+        cards = [Ass(9, 'Rosen'), Koenig(8, 'Rosen'),
+                 Ober(7, 'Eicheln'), Sechs(1, 'Schellen')]
+        players = ['comps', 'compo', 'compn', 'compe']
+        game = _trick_from_plays('comps', list(zip(players, cards)))
+        dealer = _FakeDealer(game)
+        max_game(dealer, 'Eicheln', 'comps', game)
+        # Each player's lastf is their card's suit.
+        self.assertEqual(dealer.lastf['comps'], 'Rosen')
+        self.assertEqual(dealer.lastf['compo'], 'Rosen')
+        self.assertEqual(dealer.lastf['compn'], 'Eicheln')
+        self.assertEqual(dealer.lastf['compe'], 'Schellen')
+        # Each played card is blanked in ``farben`` by its rank slot.
+        for card in cards:
+            self.assertIsNone(dealer.farben[card.suit][card.rank])
+
+    def test_4p_starter_not_comps(self):
+        # Verify it works regardless of who leads — use compo as first.
+        cards = [Ass(9, 'Rosen'), Koenig(8, 'Rosen'),
+                 Ober(7, 'Rosen'), Banner(5, 'Rosen')]
+        players = ['compo', 'compn', 'compe', 'comps']  # folger order from compo
+        game = _trick_from_plays('compo', list(zip(players, cards)))
+        dealer = _FakeDealer(game)
+        _, winner, _ = max_game(dealer, 'Eicheln', 'compo', game)
+        self.assertEqual(winner, 'compo')  # Ass highest in lead Rosen
 
 
 if __name__ == "__main__":
