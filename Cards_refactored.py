@@ -1,7 +1,7 @@
 # -*- coding: UTF-8 -*-
 import random
 from operator import itemgetter
-from collections import defaultdict, OrderedDict
+from collections import defaultdict
 from datetime import datetime
 import json
 from enum import Enum
@@ -14,43 +14,22 @@ CARD_VALUES = {
     'Under': 6, 'Ober': 7, 'Koenig': 8, 'Ass': 9
 }
 
-# Game state storage
-class GameState:
-    """Central storage for the game state to avoid globals"""
-    
-    def __init__(self):
-        self.schieber = OrderedDict()
-        self.weis = {player: [] for player in ['comps', 'compo', 'compn', 'compe']}
-        self.weis4 = {player: [] for player in ['comps', 'compo', 'compn', 'compe']}
-        self.spsp = {player: [] for player in ['comps', 'compo', 'compn', 'compe']}
-        self.spieler_id = {'compo': 1, 'compn': 2, 'compe': 3, 'comps': 4}
-        
-        # Card value definitions
-        self.cards_oben = dict(enumerate([''] + [(name, i) for i, name in enumerate(['Sechs', 'Sieben', 'Acht', 'Neun', 'Banner', 
-                              'Under', 'Ober', 'Koenig', 'Ass'], 1)], 1))
-        
-        self.cards_unten = dict(enumerate([''] + [(name, i) for i, name in enumerate(['Ass', 'Koenig', 'Ober', 'Under', 'Banner', 
-                               'Neun', 'Acht', 'Sieben', 'Sechs'], 1)], 1))
-        
-        self.cards_trumpf = dict(enumerate([''] + [
-            ('Sechs', 10), ('Sieben', 11), ('Acht', 12), ('Banner', 13), 
-            ('Ober', 14), ('Koenig', 15), ('Ass', 16), ('Neun', 17), ('Under', 18),
-        ], 1))
-        
-        # Card attributes: [rank, oben, unten, trumpf, w_oben, w_unten, w_trumpf, w_farbe]
-        self.card_attributes = dict(enumerate([''] + [
-            ['Sechs', 1, 9, 10, 0, 11, 0, 0],
-            ['Sieben', 2, 8, 11, 0, 0, 0, 0],
-            ['Acht', 3, 7, 12, 8, 8, 0, 0],
-            ['Neun', 4, 6, 17, 0, 0, 14, 4],
-            ['Banner', 5, 5, 13, 10, 10, 10, 10],
-            ['Under', 6, 4, 18, 2, 2, 20, 2],
-            ['Ober', 7, 3, 14, 3, 3, 3, 3],
-            ['Koenig', 8, 2, 15, 4, 4, 4, 4],
-            ['Ass', 9, 1, 16, 0, 11, 11, 11]
-        ], 1))
-
-game_state = GameState()
+# Per-rank attributes looked up by the 1-based `rank` index that `Play`
+# initialises its `farben` grid from. Columns:
+#   [name, rank, oben, unten, trumpf, w_oben, w_unten, w_trumpf, w_farbe]
+# Index 0 is intentionally empty so that ranks 1..9 map directly to list
+# positions (matches the 1-based rank numbering used throughout the codebase).
+CARD_ATTRIBUTES = dict(enumerate([''] + [
+    ['Sechs', 1, 9, 10, 0, 11, 0, 0],
+    ['Sieben', 2, 8, 11, 0, 0, 0, 0],
+    ['Acht', 3, 7, 12, 8, 8, 0, 0],
+    ['Neun', 4, 6, 17, 0, 0, 14, 4],
+    ['Banner', 5, 5, 13, 10, 10, 10, 10],
+    ['Under', 6, 4, 18, 2, 2, 20, 2],
+    ['Ober', 7, 3, 14, 3, 3, 3, 3],
+    ['Koenig', 8, 2, 15, 4, 4, 4, 4],
+    ['Ass', 9, 1, 16, 0, 11, 11, 11]
+], 1))
 
 class Card:
     """Base card class with common attributes and methods"""
@@ -306,7 +285,7 @@ class Play(Players):
         
         # Initialize card values for each suit and rank
         self.farben = farben if farben is not None else {
-            s: [game_state.card_attributes[y] for y in range(1, 11)] for s in SUITS
+            s: [CARD_ATTRIBUTES[y] for y in range(1, 11)] for s in SUITS
         }
         
         # Call parent constructor

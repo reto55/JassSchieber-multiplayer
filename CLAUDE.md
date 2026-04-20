@@ -47,7 +47,7 @@ Legacy files (`Cards.py`, `deal_cards.py`, `imports.py`, `ausbau/schieber*.py`) 
 
 ## Key Design Decisions
 
-**GameState class** (`Cards_refactored.py`) replaces all global variables. Holds player IDs (`spieler_id`), scoring arrays (`weis`, `weis4`, `spsp`), and the `schieber` session object.
+**Static card table** (`Cards_refactored.py` `CARD_ATTRIBUTES`): 1-based dict mapping rank → `[name, rank, oben, unten, trumpf, w_oben, w_unten, w_trumpf, w_farbe]`. The `Play` class populates its per-suit `farben` grid from it. (Historical note: this table used to live on a `GameState` singleton along with per-session scoring arrays; those arrays were never actually read, so the singleton was removed — the table stands alone as a module constant.)
 
 **Card hierarchy**: `Card` base class with rank subclasses (`Ass`, `Koenig`, `Ober`, `Under`, `Banner`, `Neun`, `Acht`, `Sieben`, `Sechs`). Each subclass defines point values for the four game modes: `oben` (trick value normal), `unten` (trick value reversed), `trumpf` (trump value), and special attributes.
 

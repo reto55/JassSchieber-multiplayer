@@ -15,7 +15,7 @@ from utils.game_utils import (
 )
 from Cards_refactored import (
     Ass, Koenig, Ober, Under, Banner, Neun, Acht, Sieben, Sechs, SUITS,
-    game_state,
+    CARD_ATTRIBUTES,
 )
 
 
@@ -177,7 +177,7 @@ class _FakeDealer:
         }
         self.lastf = {p: '' for p in ('comps', 'compo', 'compn', 'compe')}
         self.farben = {
-            s: [game_state.card_attributes[y] for y in range(1, 11)] for s in SUITS
+            s: [CARD_ATTRIBUTES[y] for y in range(1, 11)] for s in SUITS
         }
 
 
