@@ -14,12 +14,14 @@ Coordinates the 4-agent team (`schieber-backend`, `schieber-frontend`, `schieber
 Before dispatching anything:
 
 1. Check if `_workspace/` exists under project root.
-2. Check the current state of the 15 plan tasks (grep the plan file for `- [x]` vs `- [ ]`, or read commit log).
+2. **Detect task completion from BOTH plan checkboxes AND commit log.** Plan checkboxes drift — authors commit code without ticking boxes. Read `git log --oneline` and compare commit subjects (`feat: add trick loop and run() to GameSession`) to plan task titles. If a task's deliverable appears in a commit subject, treat the task as done regardless of checkbox state. Report any mismatch.
 3. Decide mode:
    - **Initial run** — no `_workspace/`, no work items queued yet → start fresh.
    - **Continuation** — `_workspace/` present, next plan task(s) ready → read latest `_workspace/*.md` artifacts for context, continue from the next uncompleted task.
    - **Partial re-run** — user asks to redo a specific task/module → move `_workspace/` → `_workspace_prev/`, rerun only the affected agent(s).
    - **New batch** — user gives a fresh scope outside the plan → treat as initial run, create plan addendum if needed.
+   - **Audit-first** — when the plan appears complete but no QA verification exists: before dispatching any build agent, spawn the QA agent to establish current state. Finding false-positive defects later is costlier than an up-front audit.
+4. **Protocol skill sanity check** — before trusting `schieber-protocol` as ground truth, verify it against actual `send_json`/`receive_json` call sites in `ausbau/game_session.py` AND the frontend dispatch. A skill written from the plan (not from code) is aspirational, not factual — reconcile to reality first. When both backend and frontend agree on a shape that differs from the skill, the skill is the thing to update, not the code.
 
 Report mode chosen to the user in one sentence before starting.
 
@@ -34,18 +36,14 @@ Determine the batch of plan tasks for this run. Default batch size: **2–4 task
    - Frontend-only tasks (13, 14): to `schieber-frontend`.
    - Mixed tasks (10, 15): split — decide which file goes where.
 
-## Phase 2: Team Build (Agent Team)
+## Phase 2: Team Build
 
-**Execution mode:** agent team. Use `TeamCreate` with `schieber-backend` and `schieber-frontend`, then `TaskCreate` with tasks for each.
+Choose execution mode based on coordination needs:
 
-```
-TeamCreate({
-  team_name: "schieber-build",
-  members: ["schieber-backend", "schieber-frontend"]
-})
-```
+- **Parallel subagents (default when skill-as-contract is sufficient):** spawn `schieber-backend` and `schieber-frontend` via two parallel `Agent` tool calls with `run_in_background: true` and `model: "opus"`. When the shared protocol skill is authoritative and complete, the agents do not need to talk mid-work — they read the same contract and deliver. This was the dominant pattern across the first four batches of this project and it worked well.
+- **Agent team (when mid-work coordination matters):** use `TeamCreate` with both members, then `TaskCreate` per plan task. Pick this when protocol changes are expected during the batch and the two agents need to negotiate shapes live via `SendMessage` (`PROTOCOL_DELTA` / `PROTOCOL_Q`).
 
-Spawn both Agents with `model: "opus"` and `run_in_background: true`. Backend writes protocol-touching code; if it needs to extend the protocol, it updates the `schieber-protocol` skill AND sends a `PROTOCOL_DELTA` message to frontend. Frontend consumes the current skill state; if it has a question, it sends `PROTOCOL_Q` to backend.
+Default to parallel subagents. Upgrade to team mode only when you can point at a specific coordination need.
 
 Monitor for completion. When both agents report done, proceed.
 
@@ -57,7 +55,7 @@ Monitor for completion. When both agents report done, proceed.
 
 ## Phase 3: QA (Subagent)
 
-**Execution mode:** single subagent. After Phase 2 team completes, teardown team (`TeamDelete`) and spawn `schieber-qa` via `Agent` tool with `model: "opus"`.
+**Execution mode:** single subagent. After Phase 2 completes (team or parallel subagents), spawn `schieber-qa` via `Agent` tool with `model: "opus"`. If Phase 2 used team mode, `TeamDelete` first.
 
 Pass QA the batch scope and pointers to backend/frontend notes. QA writes `_workspace/{N}_qa_report.md` and returns verdict: GREEN / YELLOW / RED.
 
@@ -65,11 +63,21 @@ Pass QA the batch scope and pointers to backend/frontend notes. QA writes `_work
 - **YELLOW**: non-blocker defects. Proceed to Phase 4 but surface defects for the user's decision.
 - **GREEN**: proceed to Phase 4.
 
-## Phase 4: Review (Subagent)
+**Orchestrator in-flight completion.** If QA reports a *trivial* gap (one- or two-file edit, no design question, clear fix path), the orchestrator MAY apply the fix directly and add a test rather than re-dispatching. Thresholds:
+- OK to fix directly: normalizing a field value across two call sites, adding one return-tuple element, removing an unused import, fixing a single test assertion.
+- NOT OK to fix directly: changing protocol semantics, adding new message types, any change that spans more than two files, any change requiring a judgment call about game rules.
+When in doubt, re-dispatch the backend or frontend agent with a narrow scope — that preserves ownership.
 
-**Execution mode:** single subagent. Spawn `schieber-reviewer` via `Agent` tool with `model: "opus"`. Pass the batch scope, QA report, and diff range.
+## Phase 4: Review (Subagent, optional by batch type)
 
-Reviewer writes `_workspace/{N}_review.md` and returns APPROVE or REQUEST_CHANGES.
+Whether to invoke the reviewer depends on the batch:
+
+- **Skip for skill-only batches** (no code change). The reviewer adds no value when the only files touched are `.claude/skills/*.md` — the QA cross-boundary audit already validated agreement with code.
+- **Skip for tooling-only batches** (e.g. `run_tests.py`, CI config) unless the change affects test semantics.
+- **Skip for one-file trivial fixes** completed by orchestrator in-flight per Phase 3.
+- **Invoke for every code-change batch that touches backend OR frontend code.** These are where plan drift, game-rule errors, and test-coverage gaps hide.
+
+When invoking: spawn `schieber-reviewer` via `Agent` tool with `model: "opus"`. Pass the batch scope, QA report, and diff range. Reviewer writes `_workspace/{N}_review.md` and returns APPROVE or REQUEST_CHANGES.
 
 - **REQUEST_CHANGES** with BLOCKER findings: return to Phase 2 scoped fix.
 - **REQUEST_CHANGES** with only MAJOR / MINOR / NIT: surface to user, ask whether to address now or defer.
@@ -77,9 +85,10 @@ Reviewer writes `_workspace/{N}_review.md` and returns APPROVE or REQUEST_CHANGE
 
 ## Phase 5: Commit & Plan Update
 
-1. Create git commit per plan convention (see plan file — each task has its own commit message).
-2. Tick the `- [x]` boxes in the plan file for completed tasks.
-3. Report to user: tasks completed, defects open, next batch recommended.
+1. **Defensive staging.** Run `git status --short` before staging. If any files are already staged or modified that are outside this batch (pre-existing user work, unrelated WIP), do NOT use `git add -A` or `git add .` — list the exact paths belonging to this batch and `git add` only those. If you accidentally sweep an unrelated file into a commit, use `git reset --soft HEAD~1` + `git restore --staged <path>` to fix before pushing.
+2. Create git commit per plan convention (see plan file — each task has its own commit message). One batch may produce one or several commits depending on logical scope; prefer one commit per defect or per plan task.
+3. Tick the `- [x]` boxes in the plan file for completed tasks. Use `sed -i 's/^- \[ \] /- [x] /g' <plan.md>` only when you are confident every step of every listed task is complete — otherwise edit the specific lines.
+4. Report to user: tasks completed, defects open, next batch recommended.
 
 ## Phase 6: Feedback
 

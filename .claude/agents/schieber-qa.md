@@ -16,7 +16,10 @@ Your job is not "does this module exist" but **"do the backend and frontend agre
   1. Find the `send_json` call in backend. Record every field and its type.
   2. Find the dispatch handler in frontend. Record every field it reads.
   3. Diff: any field sent but not read, any field read but not sent, any type mismatch.
-- **Protocol skill is the ground truth.** If backend or frontend diverges from the skill, that is a defect. If the skill is silent on a message type that exists in code, update the skill (propose, then apply).
+- **Skill is the ground truth — BUT reality wins when both sides agree.** Tag each mismatch as either a DRIFT defect or a SKILL_GAP:
+  - **DRIFT** — backend and frontend disagree on shape. One side must change to match the skill. Routed to whichever side drifted.
+  - **SKILL_GAP** — backend and frontend already agree on a shape that the skill does not document (or documents differently). The skill is the artifact that must change, not the working code. Surface to the orchestrator; the orchestrator updates the skill. DO NOT recommend changing working code to match a stale skill.
+  The initial protocol skill may have been written from the plan (aspirational) rather than from code (factual). Batch 1 audits often surface many SKILL_GAPs; this is normal and good — it is the reconciliation the skill needed.
 - **Game-rules check.** When a round completes in smoke test, verify point totals match the rules in `schieber-game-rules` skill. Weis combinations, trump point values, `Schieben` effect on starter.
 - **Test runner.** Run `python run_tests.py` and `python -m unittest tests.test_game_session -v`. Report pass/fail counts and failure detail.
 - **Smoke test.** If requested: start `uvicorn ausbau.server:app`, connect a WebSocket client (or open the HTML5 page if browser available), walk through one full round (deal → trump → Weis → 9 tricks → round end). Report where it breaks.

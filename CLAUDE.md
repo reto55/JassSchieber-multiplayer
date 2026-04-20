@@ -93,3 +93,11 @@ SQLite database (`schieber.db`) with tables: `schieber` (sessions), `game`, `pla
 | Date | Change | Target | Reason |
 |------|--------|--------|--------|
 | 2026-04-20 | Initial harness (backend, frontend, qa, reviewer agents; schieber-build orchestrator; schieber-protocol and schieber-game-rules skills) | whole harness | Finish 15-task HTML5 plan with coordinated roles and cross-boundary QA |
+| 2026-04-20 | Phase 0 now compares commit log with plan checkboxes | schieber-build | Plan boxes drifted — code committed for Tasks 1–14 without ticking; orchestrator was misled into treating completed work as unstarted |
+| 2026-04-20 | Parallel subagents declared valid default for Phase 2 | schieber-build | TeamCreate/SendMessage added overhead with no benefit when the protocol skill is authoritative |
+| 2026-04-20 | Reviewer phase skipped for skill-only, tooling-only, and orchestrator-inflight batches | schieber-build | Batch B and D did not benefit from reviewer; running it would have added cycle time with no findings |
+| 2026-04-20 | Orchestrator may fix trivial QA gaps in-place | schieber-build | D8 leftover (game_end winner_team normalization) was a two-line fix; re-dispatch for that would have been pure overhead |
+| 2026-04-20 | Audit-first mode added to Phase 0 | schieber-build | Tasks 1–14 already committed; QA should run before any new build to establish baseline |
+| 2026-04-20 | Defensive staging rule in Phase 5 | schieber-build | Pre-staged user work (schieber.txt) got swept into harness commit; needed soft reset to split |
+| 2026-04-20 | QA agent distinguishes DRIFT vs SKILL_GAP explicitly | schieber-qa | Initial skill was aspirational from the plan, not factual from code; Batch 1 found 4 gaps that needed skill updates, not code fixes |
+| 2026-04-20 | Protocol-skill sanity check added to Phase 0 | schieber-build | Orchestrator must verify the skill against actual `send_json`/`receive_json` sites before trusting it as ground truth |
