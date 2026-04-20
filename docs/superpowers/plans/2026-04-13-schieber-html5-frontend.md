@@ -37,13 +37,13 @@ python -m uvicorn ausbau.server:app --reload --port 8765
 - Create: `ausbau/__init__.py`
 - Create: `requirements-html5.txt`
 
-- [ ] **Step 1: Create ausbau package init**
+- [x] **Step 1: Create ausbau package init**
 
 ```bash
 touch /mnt/archive/Dokumente/Schieber_neu/ausbau/__init__.py
 ```
 
-- [ ] **Step 2: Create requirements file**
+- [x] **Step 2: Create requirements file**
 
 Create `requirements-html5.txt`:
 ```
@@ -51,7 +51,7 @@ fastapi>=0.109.0
 uvicorn[standard]>=0.27.0
 ```
 
-- [ ] **Step 3: Install dependencies**
+- [x] **Step 3: Install dependencies**
 
 ```bash
 cd /mnt/archive/Dokumente/Schieber_neu
@@ -60,14 +60,14 @@ pip install fastapi "uvicorn[standard]"
 
 Expected: both packages install without error.
 
-- [ ] **Step 4: Verify import works**
+- [x] **Step 4: Verify import works**
 
 ```bash
 python -c "import fastapi, uvicorn; print('OK')"
 ```
 Expected: `OK`
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add ausbau/__init__.py requirements-html5.txt
@@ -82,7 +82,7 @@ git commit -m "chore: add FastAPI deps for HTML5 frontend"
 - Create: `ausbau/game_session.py`
 - Create: `tests/test_game_session.py`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `tests/test_game_session.py`:
 ```python
@@ -129,7 +129,7 @@ def test_find_card_in_hand_not_found():
     assert suit is None
 ```
 
-- [ ] **Step 2: Run tests — expect failure**
+- [x] **Step 2: Run tests — expect failure**
 
 ```bash
 cd /mnt/archive/Dokumente/Schieber_neu
@@ -137,7 +137,7 @@ python -m pytest tests/test_game_session.py -v
 ```
 Expected: `ModuleNotFoundError: No module named 'ausbau.game_session'`
 
-- [ ] **Step 3: Implement card utilities**
+- [x] **Step 3: Implement card utilities**
 
 Create `ausbau/game_session.py`:
 ```python
@@ -180,14 +180,14 @@ def find_card_in_hand(code: str, hand: dict):
     return None, None
 ```
 
-- [ ] **Step 4: Run tests — expect pass**
+- [x] **Step 4: Run tests — expect pass**
 
 ```bash
 python -m pytest tests/test_game_session.py -v
 ```
 Expected: all 7 tests PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add ausbau/game_session.py tests/test_game_session.py
@@ -202,7 +202,7 @@ git commit -m "feat: add card utility functions for WebSocket serialisation"
 - Modify: `ausbau/game_session.py` (append functions)
 - Modify: `tests/test_game_session.py` (append tests)
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 Append to `tests/test_game_session.py`:
 ```python
@@ -284,14 +284,14 @@ def test_trick_points_trumpf_mode():
     assert trick_points(trick, 'Eicheln') == 45  # 20+11+10+4
 ```
 
-- [ ] **Step 2: Run tests — expect failure**
+- [x] **Step 2: Run tests — expect failure**
 
 ```bash
 python -m pytest tests/test_game_session.py -v -k "valid_cards or trick_winner or trick_points"
 ```
 Expected: `AttributeError` or `ImportError` for missing functions.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Append to `ausbau/game_session.py`:
 ```python
@@ -357,14 +357,14 @@ def trick_points(trick: dict, operator: str) -> int:
     return total
 ```
 
-- [ ] **Step 4: Run tests — expect pass**
+- [x] **Step 4: Run tests — expect pass**
 
 ```bash
 python -m pytest tests/test_game_session.py -v
 ```
 Expected: all tests PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add ausbau/game_session.py tests/test_game_session.py
@@ -379,7 +379,7 @@ git commit -m "feat: add valid card logic and trick resolution"
 - Modify: `ausbau/game_session.py`
 - Modify: `tests/test_game_session.py`
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
 Append to `tests/test_game_session.py`:
 ```python
@@ -441,14 +441,14 @@ def test_detect_stock_false_missing_ober():
     assert detect_stock(hand, 'Eicheln') is False
 ```
 
-- [ ] **Step 2: Run tests — expect failure**
+- [x] **Step 2: Run tests — expect failure**
 
 ```bash
 python -m pytest tests/test_game_session.py -v -k "ai_select or describe_weis or detect_stock"
 ```
 Expected: `ImportError` for missing functions.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Append to `ausbau/game_session.py`:
 ```python
@@ -491,14 +491,14 @@ def detect_stock(hand: dict, operator: str) -> bool:
     return 'Koenig' in ranks and 'Ober' in ranks
 ```
 
-- [ ] **Step 4: Run all tests — expect pass**
+- [x] **Step 4: Run all tests — expect pass**
 
 ```bash
 python -m pytest tests/test_game_session.py -v
 ```
 Expected: all tests PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add ausbau/game_session.py tests/test_game_session.py
@@ -513,7 +513,7 @@ git commit -m "feat: add AI card selection and Weis detection"
 - Modify: `ausbau/game_session.py`
 - Modify: `tests/test_game_session.py`
 
-- [ ] **Step 1: Write failing test**
+- [x] **Step 1: Write failing test**
 
 Append to `tests/test_game_session.py`:
 ```python
@@ -542,14 +542,14 @@ def test_initial_state_scores_accumulate():
     assert state['scores'] == {'sn': 42, 'ow': 17}
 ```
 
-- [ ] **Step 2: Run failing tests**
+- [x] **Step 2: Run failing tests**
 
 ```bash
 python -m pytest tests/test_game_session.py -v -k "initial_state"
 ```
 Expected: `ImportError` for `GameSession`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Append to `ausbau/game_session.py`:
 ```python
@@ -578,14 +578,14 @@ class GameSession:
         }
 ```
 
-- [ ] **Step 4: Run tests — expect pass**
+- [x] **Step 4: Run tests — expect pass**
 
 ```bash
 python -m pytest tests/test_game_session.py -v
 ```
 Expected: all tests PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add ausbau/game_session.py tests/test_game_session.py
@@ -600,7 +600,7 @@ git commit -m "feat: add GameSession with initial state serialisation"
 - Modify: `ausbau/game_session.py`
 - Modify: `tests/test_game_session.py`
 
-- [ ] **Step 1: Write failing test**
+- [x] **Step 1: Write failing test**
 
 Append to `tests/test_game_session.py`:
 ```python
@@ -637,14 +637,14 @@ def test_trump_phase_human_leads_schiebt():
     assert play.starter == 'compn'
 ```
 
-- [ ] **Step 2: Run failing tests**
+- [x] **Step 2: Run failing tests**
 
 ```bash
 python -m pytest tests/test_game_session.py -v -k "trump_phase"
 ```
 Expected: `AttributeError` — `_trump_phase` not defined.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Append inside the `GameSession` class in `ausbau/game_session.py`:
 ```python
@@ -686,14 +686,14 @@ Append inside the `GameSession` class in `ausbau/game_session.py`:
         })
 ```
 
-- [ ] **Step 4: Run tests — expect pass**
+- [x] **Step 4: Run tests — expect pass**
 
 ```bash
 python -m pytest tests/test_game_session.py -v
 ```
 Expected: all tests PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add ausbau/game_session.py tests/test_game_session.py
@@ -708,7 +708,7 @@ git commit -m "feat: add trump selection phase to GameSession"
 - Modify: `ausbau/game_session.py`
 - Modify: `tests/test_game_session.py`
 
-- [ ] **Step 1: Write failing test**
+- [x] **Step 1: Write failing test**
 
 Append to `tests/test_game_session.py`:
 ```python
@@ -747,14 +747,14 @@ def test_weis_phase_human_announces_adds_points():
     assert session.point_sn >= 20
 ```
 
-- [ ] **Step 2: Run failing tests**
+- [x] **Step 2: Run failing tests**
 
 ```bash
 python -m pytest tests/test_game_session.py -v -k "weis_phase"
 ```
 Expected: `AttributeError` — `_weis_phase` not defined.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Append inside `GameSession` class:
 ```python
@@ -800,14 +800,14 @@ Append inside `GameSession` class:
         })
 ```
 
-- [ ] **Step 4: Run tests — expect pass**
+- [x] **Step 4: Run tests — expect pass**
 
 ```bash
 python -m pytest tests/test_game_session.py -v
 ```
 Expected: all tests PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add ausbau/game_session.py tests/test_game_session.py
@@ -823,7 +823,7 @@ git commit -m "feat: add weis declaration phase to GameSession"
 
 No unit tests for this task (async WebSocket flow is covered by integration in Task 10). Manual test is the smoke test at the end.
 
-- [ ] **Step 1: Implement `_play_trick`**
+- [x] **Step 1: Implement `_play_trick`**
 
 Append inside `GameSession` class:
 ```python
@@ -878,7 +878,7 @@ Append inside `GameSession` class:
         return winner
 ```
 
-- [ ] **Step 2: Implement `_run_spiel`**
+- [x] **Step 2: Implement `_run_spiel`**
 
 Append inside `GameSession` class:
 ```python
@@ -914,7 +914,7 @@ Append inside `GameSession` class:
         })
 ```
 
-- [ ] **Step 3: Implement `run()`**
+- [x] **Step 3: Implement `run()`**
 
 Append inside `GameSession` class:
 ```python
@@ -934,14 +934,14 @@ Append inside `GameSession` class:
             await asyncio.sleep(2)  # pause between Spiele
 ```
 
-- [ ] **Step 4: Run existing tests to confirm no regression**
+- [x] **Step 4: Run existing tests to confirm no regression**
 
 ```bash
 python -m pytest tests/test_game_session.py -v
 ```
 Expected: all previously passing tests still PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add ausbau/game_session.py
@@ -955,7 +955,7 @@ git commit -m "feat: add trick loop and run() to GameSession"
 **Files:**
 - Create: `ausbau/server.py`
 
-- [ ] **Step 1: Create server.py**
+- [x] **Step 1: Create server.py**
 
 ```python
 # ausbau/server.py
@@ -997,7 +997,7 @@ async def websocket_endpoint(websocket: WebSocket):
             pass
 ```
 
-- [ ] **Step 2: Verify server starts**
+- [x] **Step 2: Verify server starts**
 
 ```bash
 cd /mnt/archive/Dokumente/Schieber_neu
@@ -1008,7 +1008,7 @@ kill %1
 ```
 Expected: HTML output containing `<html` or `<!DOCTYPE`.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add ausbau/server.py
@@ -1022,7 +1022,7 @@ git commit -m "feat: add FastAPI server with WebSocket endpoint"
 **Files:**
 - Rewrite: `ausbau/html5/game.html`
 
-- [ ] **Step 1: Rewrite game.html**
+- [x] **Step 1: Rewrite game.html**
 
 Replace the full content of `ausbau/html5/game.html`:
 ```html
@@ -1147,14 +1147,14 @@ Replace the full content of `ausbau/html5/game.html`:
 </html>
 ```
 
-- [ ] **Step 2: Verify the file exists and has the expected structure**
+- [x] **Step 2: Verify the file exists and has the expected structure**
 
 ```bash
 grep -c "trick-slot" /mnt/archive/Dokumente/Schieber_neu/ausbau/html5/game.html
 ```
 Expected: `4` (four trick slots).
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add ausbau/html5/game.html
@@ -1168,7 +1168,7 @@ git commit -m "feat: rewrite game.html with 5-component layout"
 **Files:**
 - Modify: `ausbau/html5/css/game.css` (append at end — existing card sprite rules stay)
 
-- [ ] **Step 1: Append layout CSS to game.css**
+- [x] **Step 1: Append layout CSS to game.css**
 
 Append the following to the end of `ausbau/html5/css/game.css`:
 ```css
@@ -1374,7 +1374,7 @@ html, body {
 .hidden { display: none !important; }
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add ausbau/html5/css/game.css
@@ -1388,7 +1388,7 @@ git commit -m "feat: add layout CSS for Schieber game UI"
 **Files:**
 - Create: `ausbau/html5/js/schieber.js`
 
-- [ ] **Step 1: Create schieber.js with connection and dispatch**
+- [x] **Step 1: Create schieber.js with connection and dispatch**
 
 Create `ausbau/html5/js/schieber.js`:
 ```javascript
@@ -1454,7 +1454,7 @@ function dispatch(msg) {
 connect();
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add ausbau/html5/js/schieber.js
@@ -1468,7 +1468,7 @@ git commit -m "feat: add WebSocket client skeleton to schieber.js"
 **Files:**
 - Modify: `ausbau/html5/js/schieber.js` (append)
 
-- [ ] **Step 1: Append render functions**
+- [x] **Step 1: Append render functions**
 
 Append to `ausbau/html5/js/schieber.js`:
 ```javascript
@@ -1545,7 +1545,7 @@ function appendLog(text, cls = '') {
 }
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add ausbau/html5/js/schieber.js
@@ -1559,7 +1559,7 @@ git commit -m "feat: add render functions to schieber.js"
 **Files:**
 - Modify: `ausbau/html5/js/schieber.js` (append)
 
-- [ ] **Step 1: Append game_start, trump, weis handlers**
+- [x] **Step 1: Append game_start, trump, weis handlers**
 
 Append to `ausbau/html5/js/schieber.js`:
 ```javascript
@@ -1722,7 +1722,7 @@ function playCard(code) {
 }
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add ausbau/html5/js/schieber.js
@@ -1735,21 +1735,21 @@ git commit -m "feat: add all message handlers and card play to schieber.js"
 
 **Files:** none (manual test)
 
-- [ ] **Step 1: Start the server**
+- [x] **Step 1: Start the server**
 
 ```bash
 cd /mnt/archive/Dokumente/Schieber_neu
 python -m uvicorn ausbau.server:app --port 8765
 ```
 
-- [ ] **Step 2: Open in browser**
+- [x] **Step 2: Open in browser**
 
 Navigate to `http://localhost:8765`. Expected:
 - Green table visible with AI bar at top and empty hand area
 - Connection message appears in game log: "Verbunden — Karten werden verteilt…"
 - 9 card backs appear in your hand
 
-- [ ] **Step 3: Play a full Spiel**
+- [x] **Step 3: Play a full Spiel**
 
 - Trump modal appears (if you are first player in Spiel 4) or trump is auto-chosen
 - Click a suit to choose trump
@@ -1759,11 +1759,11 @@ Navigate to `http://localhost:8765`. Expected:
 - After 4 cards: trick clears after 1.2s, scores update
 - After 9 tricks: round_end message in log
 
-- [ ] **Step 4: Verify AI cycles all 4 Spiele**
+- [x] **Step 4: Verify AI cycles all 4 Spiele**
 
 Wait for Spiele 1–4 to complete (AI leads first three). Score accumulates.
 
-- [ ] **Step 5: Run all unit tests one final time**
+- [x] **Step 5: Run all unit tests one final time**
 
 ```bash
 cd /mnt/archive/Dokumente/Schieber_neu
@@ -1771,7 +1771,7 @@ python -m pytest tests/test_game_session.py -v
 ```
 Expected: all tests PASS.
 
-- [ ] **Step 6: Final commit**
+- [x] **Step 6: Final commit**
 
 ```bash
 git add -A

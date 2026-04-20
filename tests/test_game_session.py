@@ -768,3 +768,62 @@ def test_trump_phase_schieben_still_works_when_allowed():
     types = [m['type'] for m in sent]
     # No errors on the happy path.
     assert 'error' not in types, types
+
+
+# --- Task 15 / step 4: 4-Spiele cycle ------------------------------------
+
+def test_run_cycles_four_spiele_and_ends():
+    """`GameSession.run` must cycle spiel_num 1→2→3→4 and then emit `game_end`.
+
+    We stub `_run_spiel` with an async function that (a) records the
+    `spiel_num` it was called with and (b) bumps `point_sn` by 300 each
+    call. With end_game=1000 this guarantees `check_game_end` fires
+    exactly after the 4th Spiel (totals: 300, 600, 900, 1200 → crosses
+    target at call 4). The test asserts the call sequence AND that a
+    final `game_end` payload is sent.
+    """
+    from unittest.mock import AsyncMock, patch
+
+    session = GameSession(end_game=1000)
+    ws = AsyncMock()
+    seen = []
+
+    async def _fake_run_spiel(self, websocket, spiel_num):
+        seen.append(spiel_num)
+        self.point_sn += 300
+
+    with patch.object(GameSession, '_run_spiel', _fake_run_spiel), \
+         patch('ausbau.game_session.asyncio.sleep', new=AsyncMock()):
+        asyncio.run(session.run(ws))
+
+    # spiel_num cycles 1,2,3,4 in order, exactly 4 calls.
+    assert seen == [1, 2, 3, 4], f"expected [1,2,3,4], got {seen}"
+
+    sent = [c[0][0] for c in ws.send_json.call_args_list]
+    game_end = [m for m in sent if m.get('type') == 'game_end']
+    assert len(game_end) == 1, f"expected exactly one game_end, got {len(game_end)}"
+    assert game_end[0]['winner_team'] == 'sn'
+    assert game_end[0]['final_scores'] == {'sn': 1200, 'ow': 0}
+
+
+def test_run_cycles_wrap_after_fourth_spiel():
+    """If end_game is not yet reached after Spiel 4, spiel_num wraps back to 1."""
+    from unittest.mock import AsyncMock, patch
+
+    session = GameSession(end_game=1000)
+    ws = AsyncMock()
+    seen = []
+
+    async def _fake_run_spiel(self, websocket, spiel_num):
+        seen.append(spiel_num)
+        # 100 points per Spiel → need 10 Spiele to cross end_game.
+        self.point_sn += 100
+
+    with patch.object(GameSession, '_run_spiel', _fake_run_spiel), \
+         patch('ausbau.game_session.asyncio.sleep', new=AsyncMock()):
+        asyncio.run(session.run(ws))
+
+    # Must wrap: 1,2,3,4,1,2,3,4,1,2 → 1000 at call 10 triggers end.
+    assert seen[:4] == [1, 2, 3, 4]
+    assert seen[4] == 1, f"spiel_num must wrap to 1 after 4, got {seen[4]}"
+    assert seen == [1, 2, 3, 4, 1, 2, 3, 4, 1, 2], seen
