@@ -11,7 +11,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 from utils.card_utils import (
     sort_unten, sort_oben, sort_trumpf, rsort_trumpf,
-    add_card, pop_card, move_cards, grades_sum, farbe_lang
+    add_card, pop_card, move_cards, farbe_lang
 )
 
 
@@ -178,17 +178,6 @@ class TestCardUtils(unittest.TestCase):
         self.assertEqual(destination[0].name, "Sechs", "First moved card should be Sechs")
         self.assertEqual(destination[1].name, "Sieben", "Second moved card should be Sieben")
         self.assertEqual(result, destination, "Result should be the destination list")
-        
-    def test_grades_sum(self):
-        """Test the grades_sum function."""
-        # Test with empty list
-        self.assertEqual(grades_sum([]), 0, "Sum of empty list should be 0")
-        
-        # Test with non-empty list
-        self.assertEqual(grades_sum([1, 2, 3, 4]), 10, "Sum should be 10")
-        
-        # Test with negative numbers
-        self.assertEqual(grades_sum([-1, 2, -3, 4]), 2, "Sum should be 2")
         
     def test_farbe_lang(self):
         """Test the farbe_lang function."""

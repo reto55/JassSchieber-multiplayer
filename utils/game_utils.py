@@ -4,33 +4,33 @@ This module provides helper functions for game mechanics.
 """
 from datetime import datetime
 
-def dauergame(game):
+def game_duration(game):
     """
     Calculate the duration of a game.
-    
+
     Args:
         game: Game dictionary with 'end_date' and 'date' keys
-        
+
     Returns:
         Tuple of (hours, minutes, seconds)
     """
-    dauer = game['end_date'] - game['date']
-    
-    minutes, second = divmod(dauer.seconds, 60)
+    duration = game['end_date'] - game['date']
+
+    minutes, second = divmod(duration.seconds, 60)
     hour, minute = divmod(minutes, 60)
     return hour, minute, second
 
 def format_game_duration(game):
     """
     Format the duration of a game as a string.
-    
+
     Args:
         game: Game dictionary with 'end_date' and 'date' keys
-        
+
     Returns:
         String representation of the game duration
     """
-    hours, minutes, seconds = dauergame(game)
+    hours, minutes, seconds = game_duration(game)
     
     if hours > 0:
         return f"{hours}h {minutes}m {seconds}s"

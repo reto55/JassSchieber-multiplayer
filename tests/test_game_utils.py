@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from utils.game_utils import (
-    dauergame, format_game_duration, calculate_points,
+    game_duration, format_game_duration, calculate_points,
     check_game_end, get_winner, get_next_player, max_game
 )
 from Cards_refactored import (
@@ -49,21 +49,21 @@ class TestGameUtils(unittest.TestCase):
             [MockCard("Schellen", 8, 15, 4, 6), MockCard("Schilten", 3, 8, 2, 8)]
         ]
         
-    def test_dauergame(self):
-        """Test the dauergame function."""
-        hours, minutes, seconds = dauergame(self.game)
-        
+    def test_game_duration(self):
+        """Test the game_duration function."""
+        hours, minutes, seconds = game_duration(self.game)
+
         self.assertEqual(hours, 1, "Hours should be 1")
         self.assertEqual(minutes, 30, "Minutes should be 30")
         self.assertEqual(seconds, 45, "Seconds should be 45")
-        
+
         # Test with a shorter duration
         game = {
             'date': datetime(2023, 1, 1, 10, 0, 0),
             'end_date': datetime(2023, 1, 1, 10, 15, 30)
         }
-        
-        hours, minutes, seconds = dauergame(game)
+
+        hours, minutes, seconds = game_duration(game)
         
         self.assertEqual(hours, 0, "Hours should be 0")
         self.assertEqual(minutes, 15, "Minutes should be 15")

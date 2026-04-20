@@ -225,7 +225,7 @@ def test_trump_phase_human_leads_chooses():
 
 
 def test_trump_phase_human_leads_schiebt():
-    """Human schiebt → partner Nord (AI) chooses via trumpfs()."""
+    """Human schiebt → partner Nord (AI) chooses via determine_trumpf_after_schieben()."""
     session = GameSession()
     play = Play(4)
     ws = AsyncMock()
@@ -762,7 +762,7 @@ def test_trump_phase_schieben_still_works_when_allowed():
     asyncio.run(session._trump_phase(ws, play))
 
     assert play.starter == 'compn'  # partner takes over after schieben
-    # operator set by AI partner via trumpfs()
+    # operator set by AI partner via determine_trumpf_after_schieben()
     assert play.operator in ['Eicheln', 'Rosen', 'Schellen', 'Schilten', 'Oben', 'Unten']
     sent = [c[0][0] for c in ws.send_json.call_args_list]
     types = [m['type'] for m in sent]

@@ -3,16 +3,28 @@
 Refactored deal_cards.py file for the Schieber card game.
 This module handles the game flow and card dealing logic.
 """
-from imports_new import *
 from time import sleep
+from datetime import datetime
 from Cards_refactored import *
+from utils.db_utils import (
+    create_connection, create_play, create_game, create_stich,
+    create_wys, create_wwys, create_schieber,
+)
+
+# --- Session-level state formerly imported from the missing imports_new.py ---
+# These module-level dicts are a legacy compatibility shim used by the
+# interactive CLI path (play.py → deal_card). Tests exercise the
+# ausbau.game_session.GameSession path and do not touch these names.
+Schieber = {'schieber_id': 0, 'date': None, 'end_date': None}
+weis = {'comps': [], 'compo': [], 'compn': [], 'compe': []}
+weis4 = {'comps': [], 'compo': [], 'compn': [], 'compe': []}
+spieler_id = {'compo': 1, 'compn': 2, 'compe': 3, 'comps': 4}
 
 # Import the database manager if available, otherwise use adapter
 try:
     from ausbau.database_manager import DatabaseManager
     USE_NEW_DB = True
 except ImportError:
-    from imports import create_connection, create_play, create_game, create_stich, create_wys, create_wwys
     USE_NEW_DB = False
 
 
@@ -38,8 +50,8 @@ class GameController:
         self.end_game = end_game
         self.time_delay = time_delay
         self.runde = starting_round
-        self.pointSN = 0  # North-South points
-        self.pointOW = 0  # East-West points
+        self.point_sn = 0  # North-South points
+        self.point_ow = 0  # East-West points
         
         # Get database connection if using new manager
         if USE_NEW_DB and isinstance(self.conn, DatabaseManager):
@@ -68,8 +80,8 @@ class GameController:
                 first=dealer.first,
                 operator=dealer.operator,
                 realname=self.human.get('compo', ''),
-                pointOW=self.pointOW,
-                pointSN=self.pointSN,
+                pointOW=self.point_ow,
+                pointSN=self.point_sn,
                 eicheln=Card.to_json(dealer.compo['Eicheln']),
                 rosen=Card.to_json(dealer.compo['Rosen']),
                 schellen=Card.to_json(dealer.compo['Schellen']),
@@ -86,8 +98,8 @@ class GameController:
                 first=dealer.first,
                 operator=dealer.operator,
                 realname=self.human.get('compn', ''),
-                pointOW=self.pointOW,
-                pointSN=self.pointSN,
+                pointOW=self.point_ow,
+                pointSN=self.point_sn,
                 eicheln=Card.to_json(dealer.compn['Eicheln']),
                 rosen=Card.to_json(dealer.compn['Rosen']),
                 schellen=Card.to_json(dealer.compn['Schellen']),
@@ -103,8 +115,8 @@ class GameController:
                 first=dealer.first,
                 operator=dealer.operator,
                 realname=self.human.get('compe', ''),
-                pointOW=self.pointOW,
-                pointSN=self.pointSN,
+                pointOW=self.point_ow,
+                pointSN=self.point_sn,
                 eicheln=Card.to_json(dealer.compe['Eicheln']),
                 rosen=Card.to_json(dealer.compe['Rosen']),
                 schellen=Card.to_json(dealer.compe['Schellen']),
@@ -120,8 +132,8 @@ class GameController:
                 first=dealer.first,
                 operator=dealer.operator,
                 realname=self.human.get('comps', ''),
-                pointOW=self.pointOW,
-                pointSN=self.pointSN,
+                pointOW=self.point_ow,
+                pointSN=self.point_sn,
                 eicheln=Card.to_json(dealer.comps['Eicheln']),
                 rosen=Card.to_json(dealer.comps['Rosen']),
                 schellen=Card.to_json(dealer.comps['Schellen']),
@@ -131,28 +143,28 @@ class GameController:
             # Use old database functions
             create_play(self.conn, play=(
                 Schieber['schieber_id'], runde, game_num, turn_num, 1, dealer.first, dealer.operator,
-                self.human.get('compo', ''), self.pointOW, self.pointSN,
+                self.human.get('compo', ''), self.point_ow, self.point_sn,
                 Card.to_json(dealer.compo['Eicheln']), Card.to_json(dealer.compo['Rosen']),
                 Card.to_json(dealer.compo['Schellen']), Card.to_json(dealer.compo['Schilten'])
             ))
             
             create_play(self.conn, play=(
                 Schieber['schieber_id'], runde, game_num, turn_num, 2, dealer.first, dealer.operator,
-                self.human.get('compn', ''), self.pointOW, self.pointSN,
+                self.human.get('compn', ''), self.point_ow, self.point_sn,
                 Card.to_json(dealer.compn['Eicheln']), Card.to_json(dealer.compn['Rosen']),
                 Card.to_json(dealer.compn['Schellen']), Card.to_json(dealer.compn['Schilten'])
             ))
             
             create_play(self.conn, play=(
                 Schieber['schieber_id'], runde, game_num, turn_num, 3, dealer.first, dealer.operator,
-                self.human.get('compe', ''), self.pointOW, self.pointSN,
+                self.human.get('compe', ''), self.point_ow, self.point_sn,
                 Card.to_json(dealer.compe['Eicheln']), Card.to_json(dealer.compe['Rosen']),
                 Card.to_json(dealer.compe['Schellen']), Card.to_json(dealer.compe['Schilten'])
             ))
             
             create_play(self.conn, play=(
                 Schieber['schieber_id'], runde, game_num, turn_num, 4, dealer.first, dealer.operator,
-                self.human.get('comps', ''), self.pointOW, self.pointSN,
+                self.human.get('comps', ''), self.point_ow, self.point_sn,
                 Card.to_json(dealer.comps['Eicheln']), Card.to_json(dealer.comps['Rosen']),
                 Card.to_json(dealer.comps['Schellen']), Card.to_json(dealer.comps['Schilten'])
             ))
@@ -400,7 +412,7 @@ class GameController:
             else:
                 # Computer partner decides trump
                 print(f'{dealer.first} Ost schiebt.')
-                dealer.operator = trumpfs(dealer.__dict__[dealer.partner[dealer.first]])
+                dealer.operator = determine_trumpf_after_schieben(dealer.__dict__[dealer.partner[dealer.first]])
                 print(f"West macht {dealer.operator} Trumpf: ")
                 dealer.starter = dealer.partner[dealer.first]
                 
@@ -436,9 +448,9 @@ class GameController:
                 self._record_wys(self.runde, game_num, key, dealer.first, 100)
         
         # Calculate wiis result
-        satz, self.pointSN, self.pointOW = wiis_result(
-            dealer.operator, dealer.first, dealer.wis, dealer.wis4, 
-            dealer, self.pointSN, self.pointOW
+        satz, self.point_sn, self.point_ow = wiis_result(
+            dealer.operator, dealer.first, dealer.wis, dealer.wis4,
+            dealer, self.point_sn, self.point_ow
         )
         print(satz)
         
@@ -456,7 +468,7 @@ class GameController:
             turn_num (int): Turn number
         """
         # Skip if game is over
-        if self.pointSN >= self.end_game or self.pointOW >= self.end_game:
+        if self.point_sn >= self.end_game or self.point_ow >= self.end_game:
             return False
             
         # Handle first player based on whether they're human or computer
@@ -478,16 +490,16 @@ class GameController:
         )
         
         # Make trick and update scores
-        dealer.first, self.pointSN, self.pointOW = mach_stich(
-            dealer, dealer.first, dealer.operator, dealer.game, 
-            dealer.stich, dealer.farben, self.pointSN, self.pointOW
+        dealer.first, self.point_sn, self.point_ow = mach_stich(
+            dealer, dealer.first, dealer.operator, dealer.game,
+            dealer.stich, dealer.farben, self.point_sn, self.point_ow
         )
         
         # Record stich
         self._record_stich(dealer, self.runde, game_num, turn_num)
         
         # Display points
-        print(self.pointSN, self.pointOW)
+        print(self.point_sn, self.point_ow)
         
         return True
             
@@ -544,20 +556,18 @@ def deal_card(conn, human=None, end_game=2500, pointSN=0, pointOW=0, t=0, runde=
     )
     
     # Set initial points
-    controller.pointSN = pointSN
-    controller.pointOW = pointOW
-    
+    controller.point_sn = pointSN
+    controller.point_ow = pointOW
+
     # Play the game
     controller.play_game()
-    
+
     # Return final points (for backward compatibility)
-    return controller.pointSN, controller.pointOW
+    return controller.point_sn, controller.point_ow
 
 
 # Testing code
 if __name__ == "__main__":
-    from imports import create_connection
-    
     # Create a connection
     conn = create_connection("schieber.db")
     

@@ -201,9 +201,9 @@ class Hand:
 class Players:
     """Manages players and their cards"""
     
-    def __init__(self, rund=1, compo=None, compn=None, compe=None, comps=None, 
+    def __init__(self, spiel_num=1, compo=None, compn=None, compe=None, comps=None,
                  ost=None, nor=None, est=None, sud=None):
-        self.rund = rund
+        self.spiel_num = spiel_num
         self.ost = ost if ost is not None else []
         self.nor = nor if nor is not None else []
         self.est = est if est is not None else []
@@ -212,34 +212,34 @@ class Players:
         self.compe = compe if compe is not None else {}
         self.compn = compn if compn is not None else {}
         self.comps = comps if comps is not None else {}
-        
+
         self.hand = Hand()
         self._initialize_players()
-        
+
     def _initialize_players(self):
         """Set up player hands based on the round number"""
-        if self.rund == 1:
-            self.compo = reihe(Hand.farbe(self._move_cards(self.hand.sp2_card, self.ost, 9)))
-            self.compn = reihe(Hand.farbe(self._move_cards(self.hand.sp3_card, self.nor, 9)))
-            self.compe = reihe(Hand.farbe(self._move_cards(self.hand.sp4_card, self.est, 9)))
-            self.comps = reihe(Hand.farbe(self._move_cards(self.hand.sp1_card, self.sud, 9)))
-        elif self.rund == 2:
-            self.compn = reihe(Hand.farbe(self._move_cards(self.hand.sp2_card, self.nor, 9)))
-            self.compe = reihe(Hand.farbe(self._move_cards(self.hand.sp3_card, self.est, 9)))
-            self.comps = reihe(Hand.farbe(self._move_cards(self.hand.sp4_card, self.sud, 9)))
-            self.compo = reihe(Hand.farbe(self._move_cards(self.hand.sp1_card, self.ost, 9)))
-        elif self.rund == 3:
-            self.compe = reihe(Hand.farbe(self._move_cards(self.hand.sp2_card, self.est, 9)))
-            self.comps = reihe(Hand.farbe(self._move_cards(self.hand.sp3_card, self.sud, 9)))
-            self.compo = reihe(Hand.farbe(self._move_cards(self.hand.sp4_card, self.ost, 9)))
-            self.compn = reihe(Hand.farbe(self._move_cards(self.hand.sp1_card, self.nor, 9)))
-        elif self.rund == 4:
-            self.comps = reihe(Hand.farbe(self._move_cards(self.hand.sp2_card, self.sud, 9)))
-            self.compo = reihe(Hand.farbe(self._move_cards(self.hand.sp3_card, self.ost, 9)))
-            self.compn = reihe(Hand.farbe(self._move_cards(self.hand.sp4_card, self.nor, 9)))
-            self.compe = reihe(Hand.farbe(self._move_cards(self.hand.sp1_card, self.est, 9)))
+        if self.spiel_num == 1:
+            self.compo = sort_hand_desc(Hand.farbe(self._move_cards(self.hand.sp2_card, self.ost, 9)))
+            self.compn = sort_hand_desc(Hand.farbe(self._move_cards(self.hand.sp3_card, self.nor, 9)))
+            self.compe = sort_hand_desc(Hand.farbe(self._move_cards(self.hand.sp4_card, self.est, 9)))
+            self.comps = sort_hand_desc(Hand.farbe(self._move_cards(self.hand.sp1_card, self.sud, 9)))
+        elif self.spiel_num == 2:
+            self.compn = sort_hand_desc(Hand.farbe(self._move_cards(self.hand.sp2_card, self.nor, 9)))
+            self.compe = sort_hand_desc(Hand.farbe(self._move_cards(self.hand.sp3_card, self.est, 9)))
+            self.comps = sort_hand_desc(Hand.farbe(self._move_cards(self.hand.sp4_card, self.sud, 9)))
+            self.compo = sort_hand_desc(Hand.farbe(self._move_cards(self.hand.sp1_card, self.ost, 9)))
+        elif self.spiel_num == 3:
+            self.compe = sort_hand_desc(Hand.farbe(self._move_cards(self.hand.sp2_card, self.est, 9)))
+            self.comps = sort_hand_desc(Hand.farbe(self._move_cards(self.hand.sp3_card, self.sud, 9)))
+            self.compo = sort_hand_desc(Hand.farbe(self._move_cards(self.hand.sp4_card, self.ost, 9)))
+            self.compn = sort_hand_desc(Hand.farbe(self._move_cards(self.hand.sp1_card, self.nor, 9)))
+        elif self.spiel_num == 4:
+            self.comps = sort_hand_desc(Hand.farbe(self._move_cards(self.hand.sp2_card, self.sud, 9)))
+            self.compo = sort_hand_desc(Hand.farbe(self._move_cards(self.hand.sp3_card, self.ost, 9)))
+            self.compn = sort_hand_desc(Hand.farbe(self._move_cards(self.hand.sp4_card, self.nor, 9)))
+            self.compe = sort_hand_desc(Hand.farbe(self._move_cards(self.hand.sp1_card, self.est, 9)))
         else:
-            raise ValueError("Invalid round number: {}".format(self.rund))
+            raise ValueError("Invalid round number: {}".format(self.spiel_num))
             
     @staticmethod
     def _move_cards(source, destination, num):
@@ -289,7 +289,7 @@ class Play(Players):
         }
         
         # Call parent constructor
-        super().__init__(rund=self.spiel, **kwargs)
+        super().__init__(spiel_num=self.spiel, **kwargs)
         
         # Set up the game based on the round
         self._setup_game()
@@ -345,7 +345,7 @@ def determine_longest_suit(player):
     return longest_suit
 
 
-def reihe(player):
+def sort_hand_desc(player):
     """Sort cards in player's hand by reverse order"""
     for suit in player:
         player[suit] = sorted(player[suit], reverse=True)
@@ -479,7 +479,7 @@ def determine_trumpf(player):
     return suit
 
 
-def trumpfs(player):
+def determine_trumpf_after_schieben(player):
     """Alternative trump determination when player passes (schiebt)"""
     # Similar to determine_trumpf but with different thresholds
     longest_suit = determine_longest_suit(player)

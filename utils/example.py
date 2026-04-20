@@ -5,7 +5,7 @@ Example script demonstrating how to use the new utility modules.
 from db_utils import create_connection, create_schieber, create_spieler, get_game_stats
 
 # Import card utilities
-from card_utils import sort_trumpf, farbe_lang, grades_sum
+from card_utils import sort_trumpf, farbe_lang
 
 # Import game utilities
 from game_utils import format_game_duration, calculate_points, get_winner
@@ -66,7 +66,7 @@ def demo_card_utils():
     
     # Calculate sum of values
     values = [1, 5, 10, 20]
-    total = grades_sum(values)
+    total = sum(values)
     print(f"Sum of values {values}: {total}")
     print()
 

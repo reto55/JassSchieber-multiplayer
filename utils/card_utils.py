@@ -14,7 +14,7 @@ def sort_unten(spieler, suit):
     Returns:
         Sorted list of cards (highest first)
     """
-    return sorted(spieler[suit], key=lambda xy: xy.grab_unten(), reverse=True)
+    return sorted(spieler[suit], key=lambda card: card.grab_unten(), reverse=True)
 
 def sort_oben(spieler, suit):
     """
@@ -27,7 +27,7 @@ def sort_oben(spieler, suit):
     Returns:
         Sorted list of cards (highest first)
     """
-    return sorted(spieler[suit], key=lambda xy: xy.grab_oben(), reverse=True)
+    return sorted(spieler[suit], key=lambda card: card.grab_oben(), reverse=True)
 
 def sort_trumpf(spieler, suit):
     """
@@ -40,7 +40,7 @@ def sort_trumpf(spieler, suit):
     Returns:
         Sorted list of cards (highest first)
     """
-    return sorted(spieler[suit], key=lambda xy: xy.grab_trumpf(), reverse=True)
+    return sorted(spieler[suit], key=lambda card: card.grab_trumpf(), reverse=True)
 
 def rsort_trumpf(spieler, suit):
     """
@@ -53,7 +53,7 @@ def rsort_trumpf(spieler, suit):
     Returns:
         Sorted list of cards (lowest first)
     """
-    return sorted(spieler[suit], key=lambda xy: xy.grab_trumpf(), reverse=False)
+    return sorted(spieler[suit], key=lambda card: card.grab_trumpf(), reverse=False)
 
 def add_card(hand, card):
     """
@@ -90,24 +90,9 @@ def move_cards(cards, sp1, num):
     Returns:
         The updated destination list
     """
-    for u in range(num):
+    for _ in range(num):
         add_card(sp1, pop_card(cards))
     return sp1
-
-def grades_sum(grades):
-    """
-    Calculate the sum of values in a list.
-    
-    Args:
-        grades: List of values
-        
-    Returns:
-        Sum of the values
-    """
-    total = 0
-    for grade in grades:
-        total += grade
-    return total
 
 def farbe_lang(spieler):
     """

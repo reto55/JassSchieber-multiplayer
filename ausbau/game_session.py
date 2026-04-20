@@ -5,7 +5,7 @@ import asyncio
 from typing import Optional
 from Cards_refactored import (
     Play, SUITS, PLAY_MODES, Card,
-    determine_trumpf, trumpfs, wiis, wiis_gleiche,
+    determine_trumpf, determine_trumpf_after_schieben, wiis, wiis_gleiche,
 )
 from utils.game_utils import check_game_end
 
@@ -182,7 +182,7 @@ class GameSession:
                 msg = await websocket.receive_json()
                 mtype = msg.get('type')
                 if mtype == 'schieben':
-                    play.operator = trumpfs(play.compn)
+                    play.operator = determine_trumpf_after_schieben(play.compn)
                     play.starter = 'compn'
                     chooser = 'Nord'
                     break
@@ -221,7 +221,7 @@ class GameSession:
                     })
                     await websocket.send_json(prompt)
             else:
-                play.operator = trumpfs(play.__dict__[partner])
+                play.operator = determine_trumpf_after_schieben(play.__dict__[partner])
                 play.starter = partner
                 chooser = POSITION_NAMES[partner]
         else:

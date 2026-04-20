@@ -31,7 +31,7 @@ The codebase has two parallel tracks: **legacy** (original code) and **refactore
 ```
 play.py                          ← CLI entry point
 deal_cards_refactored.py         ← GameController (game loop, round management)
-Cards_refactored.py              ← Core data structures (Card, Deck, Hand, Players, GameState)
+Cards_refactored.py              ← Core data structures (Card, Deck, Hand, Players, Play)
 utils/
   card_utils.py                  ← Card sorting and hand manipulation
   game_utils.py                  ← Scoring, winner logic, game duration
@@ -43,7 +43,7 @@ ausbau/
 tests/                           ← Unit and integration tests
 ```
 
-Legacy files (`Cards.py`, `deal_cards.py`, `imports.py`, `ausbau/schieber*.py`) are kept for reference. The `ausbau/` dir contains in-progress database improvements.
+Legacy files (`ausbau/schieber*.py`) are kept for reference. The `ausbau/` dir contains in-progress database improvements.
 
 ## Key Design Decisions
 
@@ -53,7 +53,7 @@ Legacy files (`Cards.py`, `deal_cards.py`, `imports.py`, `ausbau/schieber*.py`) 
 
 **Game modes**: `operator` field in each round is one of `'Eicheln'`, `'Rosen'`, `'Schellen'`, `'Schilten'` (trump suit) or `'Oben'`/`'Unten'` (no-trump modes).
 
-**Teams**: North-South (`pointSN`) vs East-West (`pointOW`). Players are `compo` (O/West), `compn` (N/North), `compe` (E/East), `comps` (S/South).
+**Teams**: North-South (`point_sn`) vs East-West (`point_ow`) at the Python layer; the SQL columns remain `pointSN` / `pointOW` (schema). Players are `compo` (O/West), `compn` (N/North), `compe` (E/East), `comps` (S/South).
 
 **`farbe_lang()`** in `card_utils.py` determines a player's longest suit with priority order: Schilten > Schellen > Eicheln > Rosen.
 
@@ -66,7 +66,7 @@ SQLite database (`schieber.db`) with tables: `schieber` (sessions), `game`, `pla
 ## Refactoring Status
 
 **Done:**
-- `Cards_refactored.py` with `GameState`, proper Card subclasses, `Hand`, `Players`
+- `Cards_refactored.py` with proper Card subclasses, `Hand`, `Players`, `Play`
 - `utils/` package with `card_utils`, `game_utils`, `db_utils`
 - `GameController` in `deal_cards_refactored.py`
 - `ausbau/database_manager.py` with OOP database layer

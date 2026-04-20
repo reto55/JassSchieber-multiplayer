@@ -20,7 +20,7 @@ from utils.card_utils import (
 )
 
 from utils.game_utils import (
-    dauergame, format_game_duration, check_game_end
+    game_duration, format_game_duration, check_game_end
 )
 
 
@@ -133,7 +133,7 @@ class TestIntegration(unittest.TestCase):
         stats = get_game_stats(self.conn, game_id)
         
         # Calculate and format game duration
-        hours, minutes, seconds = dauergame(self.game)
+        hours, minutes, seconds = game_duration(self.game)
         formatted_duration = format_game_duration(self.game)
         
         # Check if game is over based on points
