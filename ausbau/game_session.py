@@ -302,21 +302,53 @@ class GameSession:
             card = None
             if player == 'comps':
                 valid = get_valid_cards(play.comps, lead_suit, play.operator)
-                await websocket.send_json({"type": "your_turn", "valid_cards": valid})
+                prompt = {"type": "your_turn", "valid_cards": valid}
+                await websocket.send_json(prompt)
                 while True:
                     msg = await websocket.receive_json()
-                    if msg['type'] != 'play_card':
+                    # Tolerate any shape: mirror the hardening in
+                    # `_trump_phase` / `_weis_phase`. Per the schieber-protocol
+                    # skill invariant §5 ("No silent failures…server responds
+                    # with `error` and re-sends the most recent prompt"),
+                    # malformed messages must be rejected with an `error`
+                    # payload followed by a fresh `your_turn`. Only a valid
+                    # `play_card` with a `card` string pointing to a card in
+                    # the valid list breaks the loop.
+                    if not isinstance(msg, dict):
+                        await websocket.send_json({
+                            "type": "error",
+                            "message": "Ungültige Nachricht. Erwartet: 'play_card'.",
+                        })
+                        await websocket.send_json(prompt)
                         continue
-                    found, suit = find_card_in_hand(msg['card'], play.comps)
-                    if found is not None and msg['card'] in valid:
+                    mtype = msg.get('type')
+                    if mtype != 'play_card':
+                        await websocket.send_json({
+                            "type": "error",
+                            "message": (
+                                f"Erwartet: 'play_card', erhalten: {mtype!r}."
+                            ),
+                        })
+                        await websocket.send_json(prompt)
+                        continue
+                    code = msg.get('card')
+                    if not isinstance(code, str):
+                        await websocket.send_json({
+                            "type": "error",
+                            "message": "Ungültige Karte: 'card' fehlt oder ist kein String.",
+                        })
+                        await websocket.send_json(prompt)
+                        continue
+                    found, suit = find_card_in_hand(code, play.comps)
+                    if found is not None and code in valid:
                         play.comps[suit].remove(found)
                         card = found
                         break
                     await websocket.send_json({
                         "type": "error",
-                        "message": f"Ungültige Karte: {msg.get('card')}",
+                        "message": f"Ungültige Karte: {code}",
                     })
-                    await websocket.send_json({"type": "your_turn", "valid_cards": valid})
+                    await websocket.send_json(prompt)
             else:
                 card = ai_select_card(play.__dict__[player], lead_suit, play.operator)
                 play.__dict__[player][card.suit].remove(card)

@@ -827,3 +827,162 @@ def test_run_cycles_wrap_after_fourth_spiel():
     assert seen[:4] == [1, 2, 3, 4]
     assert seen[4] == 1, f"spiel_num must wrap to 1 after 4, got {seen[4]}"
     assert seen == [1, 2, 3, 4, 1, 2, 3, 4, 1, 2], seen
+
+
+# --- E4.1: _play_trick malformed-message hardening ------------------------
+
+def test_play_trick_rejects_wrong_type_then_accepts_valid():
+    """Human sends a message whose `type` is not `play_card` → server errors + re-prompts.
+    When a legitimate `play_card` finally arrives, the trick proceeds normally.
+    """
+    from unittest.mock import AsyncMock, patch
+    session = GameSession()
+    play = Play(4)  # comps leads
+    human_card = hand_to_codes(play.comps)[0]
+
+    ws = AsyncMock()
+    ws.receive_json = AsyncMock(side_effect=[
+        {"type": "noise"},                                # wrong type
+        {"type": "play_card", "card": human_card},        # valid
+    ])
+    with patch('ausbau.game_session.asyncio.sleep', new=AsyncMock()):
+        asyncio.run(session._play_trick(ws, play))
+
+    sent = [c[0][0] for c in ws.send_json.call_args_list]
+    # Must contain at least: your_turn, error, your_turn, card_played(for human)
+    types = [m['type'] for m in sent]
+    assert 'error' in types, f"expected an error payload, sequence was: {types}"
+    # Exactly one error for the single malformed message.
+    assert types.count('error') == 1, f"expected 1 error, sequence was: {types}"
+    # your_turn appears at least twice: initial prompt + re-prompt after error.
+    assert types.count('your_turn') >= 2, f"expected >=2 your_turn, sequence was: {types}"
+    # Initial your_turn → error → re-prompt your_turn, then card_played for human.
+    first_yt = types.index('your_turn')
+    err_idx = types.index('error')
+    assert first_yt < err_idx, f"your_turn must precede error: {types}"
+    # re-prompt (second your_turn) must come right after the error
+    assert types[err_idx + 1] == 'your_turn', (
+        f"re-prompt must follow error, got: {types}"
+    )
+
+
+def test_play_trick_rejects_missing_card_key_then_accepts_valid():
+    """Human sends `{\"type\": \"play_card\"}` with no `card` → server errors + re-prompts."""
+    from unittest.mock import AsyncMock, patch
+    session = GameSession()
+    play = Play(4)
+    human_card = hand_to_codes(play.comps)[0]
+
+    ws = AsyncMock()
+    ws.receive_json = AsyncMock(side_effect=[
+        {"type": "play_card"},                            # missing card
+        {"type": "play_card", "card": human_card},        # valid
+    ])
+    with patch('ausbau.game_session.asyncio.sleep', new=AsyncMock()):
+        asyncio.run(session._play_trick(ws, play))
+
+    sent = [c[0][0] for c in ws.send_json.call_args_list]
+    types = [m['type'] for m in sent]
+    assert types.count('error') == 1, f"expected 1 error, got: {types}"
+    assert types.count('your_turn') >= 2, types
+
+
+def test_play_trick_non_string_card_rejected():
+    """Human sends `card` as a non-string → server errors + re-prompts, survives."""
+    from unittest.mock import AsyncMock, patch
+    session = GameSession()
+    play = Play(4)
+    human_card = hand_to_codes(play.comps)[0]
+
+    ws = AsyncMock()
+    ws.receive_json = AsyncMock(side_effect=[
+        {"type": "play_card", "card": 42},                # non-string card
+        {"type": "play_card", "card": human_card},        # valid
+    ])
+    with patch('ausbau.game_session.asyncio.sleep', new=AsyncMock()):
+        asyncio.run(session._play_trick(ws, play))
+
+    sent = [c[0][0] for c in ws.send_json.call_args_list]
+    types = [m['type'] for m in sent]
+    assert types.count('error') == 1, types
+
+
+# --- E4.2: server-level protocol-shaped error on uncaught exception -------
+
+def test_server_sends_error_payload_before_close_on_unexpected_exception():
+    """If GameSession.run raises a non-WebSocketDisconnect exception, the /ws handler
+    must send a protocol-shaped `{type: "error", message: "..."}` payload before closing.
+    """
+    from unittest.mock import AsyncMock, patch
+    import importlib
+
+    # Import the module fresh so we can monkeypatch its GameSession.
+    from ausbau import server as server_mod
+
+    ws = AsyncMock()
+    # receive_json should never be reached — we raise during run().
+    # .send_json and .close are AsyncMocks by default.
+
+    async def _boom_run(self, websocket):
+        raise RuntimeError("synthetic failure in GameSession.run")
+
+    with patch.object(server_mod.GameSession, 'run', _boom_run):
+        asyncio.run(server_mod.websocket_endpoint(ws))
+
+    # Collect every send_json payload
+    sent = [c[0][0] for c in ws.send_json.call_args_list]
+    error_msgs = [m for m in sent if isinstance(m, dict) and m.get('type') == 'error']
+    assert len(error_msgs) >= 1, (
+        f"expected an error payload before close, sent: {sent}"
+    )
+    # Must carry a message string
+    assert isinstance(error_msgs[-1].get('message'), str)
+    assert error_msgs[-1]['message']  # non-empty
+
+    # close() must have been called
+    assert ws.close.await_count >= 1 or ws.close.call_count >= 1, (
+        "websocket.close() must be invoked after the error payload"
+    )
+
+
+def test_server_disconnect_does_not_send_error_payload():
+    """Regression: WebSocketDisconnect is the clean-exit path — no error payload."""
+    from unittest.mock import AsyncMock, patch
+    from fastapi import WebSocketDisconnect
+    from ausbau import server as server_mod
+
+    ws = AsyncMock()
+
+    async def _disconnect_run(self, websocket):
+        raise WebSocketDisconnect(code=1000)
+
+    with patch.object(server_mod.GameSession, 'run', _disconnect_run):
+        asyncio.run(server_mod.websocket_endpoint(ws))
+
+    sent = [c[0][0] for c in ws.send_json.call_args_list]
+    error_msgs = [m for m in sent if isinstance(m, dict) and m.get('type') == 'error']
+    assert error_msgs == [], (
+        f"WebSocketDisconnect path must not send an error payload, got: {error_msgs}"
+    )
+
+
+def test_server_survives_if_error_send_itself_fails():
+    """If the final error-send raises (e.g. socket already half-closed), the handler
+    must still fall through to close() without propagating the secondary failure.
+    """
+    from unittest.mock import AsyncMock, patch
+    from ausbau import server as server_mod
+
+    ws = AsyncMock()
+    # Make send_json raise to simulate a dead socket.
+    ws.send_json = AsyncMock(side_effect=RuntimeError("socket dead"))
+
+    async def _boom_run(self, websocket):
+        raise RuntimeError("original failure")
+
+    with patch.object(server_mod.GameSession, 'run', _boom_run):
+        # Must not raise
+        asyncio.run(server_mod.websocket_endpoint(ws))
+
+    # close was still attempted
+    assert ws.close.await_count >= 1 or ws.close.call_count >= 1
