@@ -144,7 +144,8 @@ class Deck(list):
     
     def __init__(self):
         super().__init__(create_card(r + 1, s) for r in range(9) for s in SUITS)
-        random.shuffle(self)
+        for _ in range(6):
+            random.shuffle(self)
 
 
 class Hand:

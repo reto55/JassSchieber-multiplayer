@@ -3,7 +3,35 @@
     "allow": [
       "Bash(/home/reto/.claude/plugins/cache/claude-plugins-official/superpowers/5.0.7/skills/brainstorming/scripts/start-server.sh:*)",
       "Bash(git init:*)",
-      "Bash(git -c user.email=schieber@local -c user.name=schieber commit -q -m \"chore: initial commit of existing Schieber codebase\")"
+      "Bash(git -c user.email=schieber@local -c user.name=schieber commit -q -m \"chore: initial commit of existing Schieber codebase\")",
+      "Bash(pip install:*)",
+      "Bash(python:*)",
+      "Bash(git -c user.email=schieber@local -c user.name=schieber commit -m \"chore: add FastAPI deps for HTML5 frontend\")",
+      "Bash(python3 -c \"import sys; sys.path.insert\\(0, '/mnt/archive/Dokumente/Schieber_neu'\\); from Cards_refactored import Ass, SUITS; print\\('Cards_refactored OK'\\); from utils.game_utils import check_game_end, get_winner; print\\('game_utils OK'\\)\")",
+      "Bash(python3:*)",
+      "Bash(git -c user.email=schieber@local -c user.name=schieber commit -m \"feat: add card utility functions for WebSocket serialisation\")",
+      "Bash(git -c user.email=schieber@local -c user.name=schieber commit -m \"feat: add valid card logic and trick resolution\")",
+      "Bash(git -c user.email=schieber@local -c user.name=schieber commit -m \"feat: add AI card selection and Weis detection\")",
+      "Bash(git -c user.email=schieber@local -c user.name=schieber commit -m ':*)",
+      "Bash(git -c user.email=schieber@local -c user.name=schieber commit -m \"feat: add trump selection phase to GameSession\")",
+      "Bash(git -c user.email=schieber@local -c user.name=schieber commit -m \"feat: add weis declaration phase to GameSession\")",
+      "Bash(git -c user.email=schieber@local -c user.name=schieber commit -m \"feat: add trick loop and run\\(\\) to GameSession\")",
+      "Bash(git -c user.email=schieber@local -c user.name=schieber commit -m \"feat: add FastAPI server with WebSocket endpoint\")",
+      "Bash(git -c user.email=schieber@local -c user.name=schieber commit -m \"feat: rewrite game.html with 5-component layout\")",
+      "Bash(git -c user.email=schieber@local -c user.name=schieber commit -m \"feat: add layout CSS for Schieber game UI\")",
+      "Bash(git -c user.email=schieber@local -c user.name=schieber commit -m \"feat: add WebSocket client skeleton to schieber.js\")",
+      "Bash(git -c user.email=schieber@local -c user.name=schieber commit -m \"feat: add render functions to schieber.js\")",
+      "Bash(git -c user.email=schieber@local -c user.name=schieber commit -m \"feat: add all message handlers and card play to schieber.js\")",
+      "Bash(node -c ausbau/html5/js/schieber.js)",
+      "Bash(kill %1)",
+      "Bash(wait)",
+      "Bash(git -C /mnt/archive/Dokumente/Schieber_neu status --short)",
+      "Bash(git -C /mnt/archive/Dokumente/Schieber_neu diff --stat HEAD)",
+      "Bash(git -C /mnt/archive/Dokumente/Schieber_neu log -1 --format=\"%an <%ae>\")",
+      "Bash(git -C /mnt/archive/Dokumente/Schieber_neu config --get user.email)",
+      "Bash(git *)",
+      "Bash(playwright install *)",
+      "Bash(pip show *)"
     ]
   }
 }

@@ -1,0 +1,9 @@
+Der Schieber Jass ist eine der beliebtesten Varianten des Jassens, eines traditionellen Kartenspiels im alemannischen Raum, das in der Schweiz als Nationalspiel gilt. Es wird zu viert gespielt, wobei immer zwei Spieler eine Partei bilden; die Partner sitzen sich dabei am Tisch gegenüber.
+
+Gespielt wird mit einem Paket zu 36 Karten (ohne 2 bis 6). Die Kartenwerte und -punkte sind im Normalfall wie folgt: Ass (11 Punkte), König (4 Punkte), Ober (3 Punkte), Unter (2 Punkte), Banner (10 Punkte), 9, 8, 7 (je 0 Punkte). Das Ziel ist es, durch geschicktes Ausspielen und Stechen möglichst viele Punkte zu sammeln.
+
+Der namensgebende „Schieber“ ist das zentrale Element dieser Variante: Nach dem Austeilen der Karten (jeder Spieler erhält 9 Karten) darf jeder Spieler einmal, aber nur einmal während des Spiels, eine Farbe „schieben“. Das bedeutet, er bestimmt die Trumpffarbe für die aktuelle Runde und gibt den verbleibenden Stapel (den Talon) an seinen Partner weiter. Dieser nimmt die Karten auf und muss dieselbe Farbe als Trumpf spielen. Kann oder will niemand eine Farbe schieben, wird oft „Obenabe“ (Trumpf ist die Farbe der ersten gespielten Karte) oder „Untenufe“ gespielt, je nach lokaler Absprache.
+
+Ein wichtiger Aspekt sind die „Weisen“ (oder „Wys“): Das sind spezielle Kartenkombinationen wie Folgen von mindestens drei aufeinanderfolgenden Karten derselben Farbe oder vier gleiche Bilder (z. B. vier Könige), die zusätzliche Punkte bringen. Diese müssen vor dem Ausspielen der ersten Karte angesagt werden. Die genauen Regeln für Weisen können regional leicht variieren.
+
+Das Spiel endet, wenn alle Karten ausgespielt sind. Die Punkte der gestochenen Karten sowie eventuelle Weispunkte werden addiert. Gewonnen hat die Partei, die als erste eine vorher vereinbarte Punktzahl (oft 1000 oder 1500 Punkte) erreicht.

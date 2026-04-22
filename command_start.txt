@@ -1,0 +1,3 @@
+cd ausbau
+
+python -m uvicorn server:app --reload
