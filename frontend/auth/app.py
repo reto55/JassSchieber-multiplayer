@@ -2,22 +2,26 @@ import secrets
 from datetime import datetime, timezone, timedelta
 from types import SimpleNamespace
 
-from fastapi import FastAPI, Depends, Form, Request, Response
+from fastapi import FastAPI, Depends, Form, Request, Response, HTTPException
 from fastapi.responses import JSONResponse, HTMLResponse
 from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from passlib.context import CryptContext
 
 from frontend.auth.users import make_fastapi_users, make_manager_dep
 from frontend.auth.schemas import UserRead, UserCreate, UserUpdate
-from frontend.auth.email import MailBackend, Mail, render_verification
+from frontend.auth.email import MailBackend, Mail, render_verification, render_reset
 from frontend.auth.settings import Settings
 from frontend.auth.models import AccessToken, User, EmailToken
 from frontend.auth.lockout import is_locked_out, record_attempt, clear_email_streak
 from frontend.auth.deps import make_current_user_dep, make_require_admin_dep
+from frontend.auth.passwords import validate_password
 
 
 TTL_NORMAL = timedelta(hours=2)
 TTL_REMEMBER = timedelta(days=30)
+
+pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 def build_app(*, get_session, settings: Settings, mail: MailBackend) -> FastAPI:
@@ -168,5 +172,49 @@ def build_app(*, get_session, settings: Settings, mail: MailBackend) -> FastAPI:
             body=body,
         ))
         return {"status": "sent"}
+
+    @app.post("/auth/forgot", status_code=202)
+    async def forgot(payload: dict, session: AsyncSession = Depends(get_session)):
+        email = payload.get("email", "").lower()
+        u = (await session.execute(
+            select(User).where(User.email == email, User.is_active == True)
+        )).scalar_one_or_none()
+        if u is None:
+            return {"status": "ok"}
+        token = secrets.token_urlsafe(32)
+        session.add(EmailToken(
+            token=token,
+            user_id=u.id,
+            purpose="reset",
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+        ))
+        await session.commit()
+        body = render_reset(username=u.username, base_url=settings_obj.base_url, token=token)
+        await mail_obj.send(Mail(to=u.email, subject="Reset your Schieber password", body=body))
+        return {"status": "ok"}
+
+    @app.post("/auth/reset")
+    async def reset(payload: dict, session: AsyncSession = Depends(get_session)):
+        token = payload.get("token", "")
+        new_password = payload.get("new_password", "")
+        et = (await session.execute(
+            select(EmailToken).where(
+                EmailToken.token == token, EmailToken.purpose == "reset"
+            )
+        )).scalar_one_or_none()
+        now = datetime.now(timezone.utc)
+        # Handle both naive and aware datetimes from database
+        expires_at = et.expires_at if et else None
+        if expires_at and expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        if et is None or et.used_at is not None or (expires_at and expires_at < now):
+            raise HTTPException(410, "link expired or used")
+        u = (await session.execute(select(User).where(User.id == et.user_id))).scalar_one()
+        validate_password(new_password, username=u.username, email=u.email)
+        u.hashed_password = pwd_ctx.hash(new_password)
+        et.used_at = datetime.now(timezone.utc)
+        await session.execute(delete(AccessToken).where(AccessToken.user_id == u.id))
+        await session.commit()
+        return {"status": "ok"}
 
     return app
