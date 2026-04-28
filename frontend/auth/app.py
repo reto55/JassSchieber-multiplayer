@@ -26,6 +26,7 @@ from frontend.auth.deps import make_current_user_dep, make_require_admin_dep
 from frontend.auth.passwords import validate_password
 from frontend.auth.ratelimit import make_limiter, LIMITS
 from frontend.auth.admin import make_admin_router
+from frontend.auth.guest import issue_guest_cookie, read_guest_cookie, GuestCookieError
 
 
 TTL_NORMAL = timedelta(hours=2)
@@ -74,6 +75,7 @@ def build_app(*, get_session, settings: Settings, mail: MailBackend) -> FastAPI:
     @limiter.limit(LIMITS["signup"])
     async def register(
         request: Request,
+        response: Response,
         user_create: UserCreate,
         manager=Depends(get_user_manager),
     ):
@@ -83,6 +85,13 @@ def build_app(*, get_session, settings: Settings, mail: MailBackend) -> FastAPI:
             raise HTTPException(status_code=400, detail="REGISTER_USER_ALREADY_EXISTS")
         except fapi_exceptions.InvalidPasswordException as e:
             raise HTTPException(status_code=422, detail=str(e.reason))
+        response.delete_cookie(
+            key="schieber_guest",
+            secure=settings_obj.secure_cookie,
+            samesite="lax",
+            httponly=True,
+            path="/",
+        )
         return UserRead.model_validate(created)
 
     @app.post("/auth/login", status_code=204)
@@ -165,6 +174,53 @@ def build_app(*, get_session, settings: Settings, mail: MailBackend) -> FastAPI:
             "id": user.id, "email": user.email, "username": user.username,
             "is_verified": user.is_verified, "is_superuser": user.is_superuser,
         }
+
+    @app.get("/auth/whoami")
+    @limiter.limit(LIMITS["whoami"])
+    async def whoami(
+        request: Request,
+        response: Response,
+        session: AsyncSession = Depends(get_session),
+    ):
+        sess = request.cookies.get("schieber_session")
+        if sess:
+            q = select(AccessToken).where(
+                AccessToken.token == sess,
+                AccessToken.expires_at > datetime.now(timezone.utc),
+            )
+            at = (await session.execute(q)).scalar_one_or_none()
+            if at:
+                u = (await session.execute(
+                    select(User).where(User.id == at.user_id)
+                )).scalar_one_or_none()
+                if u and u.is_active:
+                    return {
+                        "kind": "user",
+                        "display_name": u.username,
+                        "is_verified": u.is_verified,
+                        "is_superuser": u.is_superuser,
+                    }
+
+        guest_cookie = request.cookies.get("schieber_guest")
+        guest = None
+        if guest_cookie:
+            try:
+                guest = read_guest_cookie(guest_cookie, settings_obj.secret_key)
+            except GuestCookieError:
+                guest = None
+
+        if guest is None:
+            new_cookie, guest = issue_guest_cookie(settings_obj.secret_key)
+            response.set_cookie(
+                key="schieber_guest",
+                value=new_cookie,
+                max_age=30 * 24 * 60 * 60,
+                httponly=True,
+                secure=settings_obj.secure_cookie,
+                samesite="lax",
+            )
+
+        return {"kind": "guest", "display_name": guest.display_name}
 
     @app.get("/auth/export")
     async def export_account(
