@@ -9,7 +9,7 @@ This is a Python implementation of **Schieber**, a classic Swiss four-player car
 ## Commands
 
 ```bash
-# Run the HTML5 game server
+# Run the HTML5 game server (set required env first; copy from .env.example)
 python -m uvicorn ausbau.server:app --reload --port 8765
 # open http://localhost:8765
 
@@ -22,7 +22,12 @@ python -m pytest tests/test_game_utils.py
 python -m pytest tests/test_db_utils.py
 python -m pytest tests/test_game_session.py
 python -m pytest tests/test_integration.py
+
+# Run only the auth test suite
+python -m pytest tests/auth/
 ```
+
+Auth requires env vars (see `.env.example`): `SECRET_KEY`, `BASE_URL`, `SMTP_USER`, `SMTP_APP_PASSWORD`, `MAIL_BACKEND`, `ADMIN_BOOTSTRAP_EMAIL`. Tests monkeypatch these; `MAIL_BACKEND=console` sends mail to stdout.
 
 Python 3.9+ with `fastapi` + `uvicorn` for the HTML5 server; `pytest` for tests; otherwise stdlib only (`sqlite3`, `datetime`, `enum`, `collections`, `random`, `json`, `asyncio`).
 
@@ -75,6 +80,7 @@ SQLite database (`schieber.db`) with tables: `schieber` (sessions), `game`, `pla
 - `ausbau/game_session.py` + `ausbau/server.py` (HTML5 WebSocket game loop, plan in `docs/superpowers/plans/2026-04-13-schieber-html5-frontend.md` fully done)
 - Test suite in `tests/`
 - `GameState` singleton removed (E2), `max_game` readability pass (E1), naming standardisation (E3), live-path error handling (E4), legacy CLI (`play.py`, `deal_cards_refactored.py`, `GAME_FLOW_README.md`) deleted (E5).
+- **Sub-project B — User accounts** (this branch). Spec: `docs/superpowers/specs/2026-04-28-schieber-accounts-design.md`. Plan: `docs/superpowers/plans/2026-04-28-schieber-accounts.md`. New package `frontend/auth/` provides email-and-password signup/login, soft email verification, password reset, change-email/password, account delete (soft, with 30-day tombstone) and export, admin tools (bootstrap-by-env, ban/unban/promote/demote/force-verify, audit log), per-IP rate limiting (slowapi), and signed guest cookies for anonymous play. WS handshake reads cookies and resolves to `User` or `Guest` principal, used for log labelling. Auth tables live in their own `auth.db` (async SQLAlchemy + aiosqlite); game tables stay raw `sqlite3`. Server entry: `python -m uvicorn ausbau.server:app --reload --port 8765` (env vars per `.env.example`).
 
 ## Harness: Schieber
 
