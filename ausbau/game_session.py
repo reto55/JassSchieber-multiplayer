@@ -175,6 +175,42 @@ class GameSession:
         self._completed_tricks = []
         self._swap_requests = {}
 
+    async def _transfer_host(self):
+        """Pick oldest-connected human as new host. No-op if none connected."""
+        from ausbau.room import principal_id
+        candidates = [
+            s for s in self.seats
+            if not s.is_ai and s.websocket is not None and s.connected_since is not None
+        ]
+        if not candidates:
+            return
+        candidates.sort(key=lambda s: (s.connected_since, principal_id(s.principal)))
+        new_host = candidates[0]
+        old_host_pos = next(
+            (s.position for s in self.seats
+             if s.principal is not None and principal_id(s.principal) == self.host_principal_id),
+            None
+        )
+        self.host_principal_id = principal_id(new_host.principal)
+        msg = {
+            "type": "host_changed",
+            "old_host_position": old_host_pos,
+            "new_host_position": new_host.position,
+            "new_host_display_name": new_host.display_name(),
+        }
+        for seat in self.seats:
+            if seat.websocket is not None and not seat.is_ai:
+                try:
+                    await seat.websocket.send_json(msg)
+                except Exception:
+                    pass
+        for spec in list(self.spectators):
+            try:
+                if spec.websocket is not None:
+                    await spec.websocket.send_json(msg)
+            except Exception:
+                pass
+
     def _initial_state(self, play: Play) -> dict:
         return {
             "type": "game_start",

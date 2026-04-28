@@ -269,6 +269,171 @@ async def get_room_endpoint(code: str):
 
 
 # ---------------------------------------------------------------------------
+# Join / leave / spectate helpers
+# ---------------------------------------------------------------------------
+
+def _seat_for_principal(room, principal):
+    from ausbau.room import principal_id
+    pid = principal_id(principal)
+    for seat in room.seats:
+        if seat.principal is not None and principal_id(seat.principal) == pid:
+            return seat
+    return None
+
+
+def _spectator_for_principal(room, principal):
+    from ausbau.room import principal_id
+    pid = principal_id(principal)
+    for spec in room.spectators:
+        if principal_id(spec.principal) == pid:
+            return spec
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Join / leave / spectate endpoints
+# ---------------------------------------------------------------------------
+
+@app.post("/rooms/{code}/join")
+async def join_endpoint(
+    code: str,
+    payload: Optional[dict] = Body(default={}),
+    request: Request = None,
+    response: Response = None,
+):
+    from ausbau.room import get_room, principal_id
+    room = get_room(code)
+    if room is None:
+        raise HTTPException(404, "room not found")
+    if room.state != "lobby":
+        raise HTTPException(409, "game already started")
+    principal = await _get_principal(request, response)
+
+    # Already seated? Idempotent return.
+    existing = _seat_for_principal(room, principal)
+    if existing is not None:
+        return {"seat": room.seats.index(existing), "room_state": _room_state_dict(room)}
+
+    # Pick seat
+    target_idx = (payload or {}).get("seat")
+    if target_idx is None:
+        for i, s in enumerate(room.seats):
+            if s.is_ai:
+                target_idx = i
+                break
+        if target_idx is None:
+            raise HTTPException(409, "room full")
+    else:
+        if not (0 <= target_idx < 4):
+            raise HTTPException(422, "invalid seat index")
+        if not room.seats[target_idx].is_ai:
+            raise HTTPException(409, "seat occupied")
+
+    seat = room.seats[target_idx]
+    seat.principal = principal
+    seat.is_ai = False
+    return {"seat": target_idx, "room_state": _room_state_dict(room)}
+
+
+@app.post("/rooms/{code}/leave", status_code=204)
+async def leave_endpoint(
+    code: str,
+    payload: Optional[dict] = Body(default={}),
+    request: Request = None,
+    response: Response = None,
+):
+    from ausbau.room import get_room, principal_id
+    room = get_room(code)
+    if room is None:
+        raise HTTPException(404, "room not found")
+    principal = await _get_principal(request, response)
+    target_pos = (payload or {}).get("target_position")
+
+    if target_pos is None:
+        # Self-leave
+        seat = _seat_for_principal(room, principal)
+        if seat is None:
+            return Response(status_code=204)
+        if room.state == "lobby":
+            was_host = principal_id(principal) == room.host_principal_id
+            seat.principal = None
+            seat.is_ai = True
+            seat.websocket = None
+            if was_host:
+                await room._transfer_host()
+        else:
+            # Mid-game: AI takeover, NO 60s grace (explicit leave)
+            seat.is_ai = True
+            seat.websocket = None
+            seat.principal = None
+            seat.state_event.set()
+        return Response(status_code=204)
+
+    # Kick (host-only, lobby-only)
+    if principal_id(principal) != room.host_principal_id:
+        raise HTTPException(403, "host only")
+    if room.state != "lobby":
+        raise HTTPException(400, "cannot kick mid-game")
+    if target_pos not in ('compo', 'compn', 'compe', 'comps'):
+        raise HTTPException(422, "invalid position")
+    seat = next(s for s in room.seats if s.position == target_pos)
+    if seat.is_ai or seat.principal is None:
+        return Response(status_code=204)
+    if seat.websocket is not None:
+        try:
+            await seat.websocket.close(code=1008, reason="kicked from room")
+        except Exception:
+            pass
+    seat.principal = None
+    seat.is_ai = True
+    seat.websocket = None
+    return Response(status_code=204)
+
+
+@app.post("/rooms/{code}/spectate")
+async def spectate_endpoint(
+    code: str,
+    request: Request,
+    response: Response,
+):
+    from ausbau.room import get_room, Spectator, SPECTATOR_CAP_PER_ROOM
+    room = get_room(code)
+    if room is None:
+        raise HTTPException(404, "room not found")
+    principal = await _get_principal(request, response)
+    if _seat_for_principal(room, principal) is not None:
+        raise HTTPException(409, "already seated; cannot spectate")
+    if len(room.spectators) >= SPECTATOR_CAP_PER_ROOM:
+        raise HTTPException(503, "spectator capacity reached")
+    if _spectator_for_principal(room, principal) is None:
+        room.spectators.append(Spectator(principal=principal, websocket=None))
+    return _room_state_dict(room)
+
+
+@app.post("/rooms/{code}/leave-spectator", status_code=204)
+async def leave_spectator_endpoint(
+    code: str,
+    request: Request,
+    response: Response,
+):
+    from ausbau.room import get_room
+    room = get_room(code)
+    if room is None:
+        raise HTTPException(404, "room not found")
+    principal = await _get_principal(request, response)
+    spec = _spectator_for_principal(room, principal)
+    if spec is None:
+        return Response(status_code=204)
+    if spec.websocket is not None:
+        try:
+            await spec.websocket.close()
+        except Exception:
+            pass
+    room.spectators.remove(spec)
+    return Response(status_code=204)
+
+
+# ---------------------------------------------------------------------------
 # WebSocket game endpoint
 # ---------------------------------------------------------------------------
 
