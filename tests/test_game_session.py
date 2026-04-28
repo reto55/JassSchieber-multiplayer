@@ -986,3 +986,54 @@ def test_server_survives_if_error_send_itself_fails():
 
     # close was still attempted
     assert ws.close.await_count >= 1 or ws.close.call_count >= 1
+
+
+# --- Task 23: WS principal injection tests --------------------------------
+
+import pytest
+
+
+@pytest.mark.asyncio
+async def test_resolve_principal_returns_guest_when_no_cookies(monkeypatch):
+    """resolve_principal returns a fresh Guest when neither cookie is present."""
+    # Bypass auth_settings init by stubbing the load
+    from frontend.auth.guest import Guest
+    import ausbau.server as srv
+
+    monkeypatch.setattr(srv, "_auth_settings", _StubSettings())
+    monkeypatch.setattr(srv, "_auth_factory", None)
+
+    class FakeWS:
+        cookies = {}
+
+    p = await srv.resolve_principal(FakeWS())
+    assert isinstance(p, Guest)
+
+
+@pytest.mark.asyncio
+async def test_resolve_principal_returns_user_when_session_cookie_valid(monkeypatch):
+    """resolve_principal returns the User from _resolve_user_from_cookie when cookie is valid."""
+    import ausbau.server as srv
+
+    fake_user = _StubUser()
+    fake_user.username = "testuser"
+
+    async def stub_resolver(token):
+        return fake_user
+
+    monkeypatch.setattr(srv, "_auth_settings", _StubSettings())
+    monkeypatch.setattr(srv, "_resolve_user_from_cookie", stub_resolver)
+
+    class FakeWS:
+        cookies = {"schieber_session": "abc"}
+
+    p = await srv.resolve_principal(FakeWS())
+    assert p is fake_user
+
+
+class _StubSettings:
+    secret_key = "k" * 32
+
+
+class _StubUser:
+    pass

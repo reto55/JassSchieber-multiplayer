@@ -2,12 +2,15 @@ import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import asyncio
+import logging
 from typing import Optional
 from Cards_refactored import (
     Play, SUITS, PLAY_MODES, Card,
     determine_trumpf, determine_trumpf_after_schieben, wiis, wiis_gleiche,
 )
 from utils.game_utils import check_game_end
+
+logger = logging.getLogger(__name__)
 
 SUIT_PREFIX = {'Eicheln': 'E', 'Rosen': 'R', 'Schellen': 'SE', 'Schilten': 'SI'}
 RANK_SUFFIX = {9: 'A', 8: 'K', 7: 'O', 6: 'U', 5: 'B', 4: '9', 3: '8', 2: '7', 1: '6'}
@@ -139,8 +142,9 @@ def detect_stock(hand: dict, operator: str) -> bool:
 
 
 class GameSession:
-    def __init__(self, end_game: int = 1000):
+    def __init__(self, end_game: int = 1000, principal=None):
         self.end_game = end_game
+        self.principal = principal
         self.point_sn = 0
         self.point_ow = 0
 
@@ -418,6 +422,12 @@ class GameSession:
 
     async def run(self, websocket) -> None:
         """Main loop: cycles through 4 Spiele per round until end_game score is reached."""
+        name = (
+            getattr(self.principal, "display_name", None)
+            or getattr(self.principal, "username", None)
+            or "anonymous"
+        )
+        logger.info("game start by %s", name)
         spiel_num = 0
         while True:
             spiel_num = (spiel_num % 4) + 1
