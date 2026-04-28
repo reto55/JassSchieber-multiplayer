@@ -1,8 +1,9 @@
 import secrets
+import uuid as _uuid
 from datetime import datetime, timezone, timedelta
 from types import SimpleNamespace
 
-from fastapi import FastAPI, Depends, Form, Request, Response, HTTPException
+from fastapi import FastAPI, Depends, Form, Request, Response, HTTPException, Body
 from fastapi.responses import JSONResponse, HTMLResponse
 from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,7 +17,7 @@ from frontend.auth.email import (
 )
 from frontend.auth.settings import Settings
 from frontend.auth.models import AccessToken, User, EmailToken, Tombstone
-from frontend.auth.tombstone import hash_email
+from frontend.auth.tombstone import hash_email, hash_email as _he, hash_username as _hu
 from frontend.auth.lockout import is_locked_out, record_attempt, clear_email_streak
 from frontend.auth.deps import make_current_user_dep, make_require_admin_dep
 from frontend.auth.passwords import validate_password
@@ -314,5 +315,39 @@ def build_app(*, get_session, settings: Settings, mail: MailBackend) -> FastAPI:
         et.used_at = now
         await session.commit()
         return {"status": "ok"}
+
+    @app.delete("/auth/account")
+    async def delete_account(
+        payload: dict = Body(...),
+        user: User = Depends(current_user_dep),
+        session: AsyncSession = Depends(get_session),
+    ):
+        current = payload.get("current_password", "")
+        u = (await session.execute(select(User).where(User.id == user.id))).scalar_one()
+        if not pwd_ctx.verify(current, u.hashed_password):
+            raise HTTPException(401, "wrong current password")
+        # Tombstone first (preserves original hashes)
+        session.add(Tombstone(
+            id=u.id,
+            email_hash=_he(u.email),
+            username_hash=_hu(u.username),
+            deleted_at=datetime.now(timezone.utc),
+        ))
+        # Anonymise
+        u.email = f"deleted-{_uuid.uuid4()}@invalid"
+        u.username = f"deleted-{u.id[:8]}"
+        u.hashed_password = ""
+        u.is_active = False
+        # Revoke
+        await session.execute(delete(AccessToken).where(AccessToken.user_id == u.id))
+        await session.commit()
+        resp = JSONResponse({"status": "ok"})
+        resp.delete_cookie(
+            key="schieber_session",
+            secure=settings_obj.secure_cookie,
+            samesite="lax",
+            httponly=True,
+        )
+        return resp
 
     return app
