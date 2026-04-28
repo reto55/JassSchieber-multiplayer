@@ -10,9 +10,13 @@ from passlib.context import CryptContext
 
 from frontend.auth.users import make_fastapi_users, make_manager_dep
 from frontend.auth.schemas import UserRead, UserCreate, UserUpdate
-from frontend.auth.email import MailBackend, Mail, render_verification, render_reset
+from frontend.auth.email import (
+    MailBackend, Mail, render_verification, render_reset,
+    render_change_email_confirm, render_change_email_notice, mask_email,
+)
 from frontend.auth.settings import Settings
-from frontend.auth.models import AccessToken, User, EmailToken
+from frontend.auth.models import AccessToken, User, EmailToken, Tombstone
+from frontend.auth.tombstone import hash_email
 from frontend.auth.lockout import is_locked_out, record_attempt, clear_email_streak
 from frontend.auth.deps import make_current_user_dep, make_require_admin_dep
 from frontend.auth.passwords import validate_password
@@ -235,6 +239,79 @@ def build_app(*, get_session, settings: Settings, mail: MailBackend) -> FastAPI:
         await session.execute(delete(AccessToken).where(
             AccessToken.user_id == u.id, AccessToken.token != cur_token
         ))
+        await session.commit()
+        return {"status": "ok"}
+
+    @app.post("/auth/change-email", status_code=202)
+    async def change_email(
+        payload: dict,
+        request: Request,
+        user: User = Depends(current_user_dep),
+        session: AsyncSession = Depends(get_session),
+    ):
+        new_email = payload.get("new_email", "").lower()
+        current = payload.get("current_password", "")
+        u = (await session.execute(select(User).where(User.id == user.id))).scalar_one()
+        if not pwd_ctx.verify(current, u.hashed_password):
+            raise HTTPException(401, "wrong current password")
+
+        # collision check (live + tombstone <30d)
+        existing = (await session.execute(
+            select(User).where(User.email == new_email)
+        )).scalar_one_or_none()
+        if existing:
+            raise HTTPException(409, "email already in use")
+
+        cutoff = datetime.now(timezone.utc) - timedelta(days=30)
+        if (await session.execute(
+            select(Tombstone).where(
+                Tombstone.email_hash == hash_email(new_email),
+                Tombstone.deleted_at >= cutoff,
+            )
+        )).scalars().first():
+            raise HTTPException(409, "email recently used")
+
+        token = secrets.token_urlsafe(32)
+        session.add(EmailToken(
+            token=token,
+            user_id=u.id,
+            purpose="change_email",
+            new_value=new_email,
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+        ))
+        await session.commit()
+
+        await mail_obj.send(Mail(
+            to=new_email,
+            subject="Confirm new email for Schieber",
+            body=render_change_email_confirm(base_url=settings_obj.base_url, token=token),
+        ))
+        await mail_obj.send(Mail(
+            to=u.email,
+            subject="Email change requested on your Schieber account",
+            body=render_change_email_notice(masked_new_email=mask_email(new_email)),
+        ))
+        return {"status": "sent"}
+
+    @app.get("/auth/confirm-email")
+    async def confirm_email(token: str, session: AsyncSession = Depends(get_session)):
+        et = (await session.execute(
+            select(EmailToken).where(
+                EmailToken.token == token, EmailToken.purpose == "change_email"
+            )
+        )).scalar_one_or_none()
+        now = datetime.now(timezone.utc)
+        if et is None or et.used_at is not None:
+            raise HTTPException(410, "link expired or used")
+        # Handle both naive and aware datetimes from database
+        expires_at = et.expires_at
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        if expires_at < now:
+            raise HTTPException(410, "link expired or used")
+        u = (await session.execute(select(User).where(User.id == et.user_id))).scalar_one()
+        u.email = et.new_value
+        et.used_at = now
         await session.commit()
         return {"status": "ok"}
 
