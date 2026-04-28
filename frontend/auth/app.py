@@ -3,15 +3,15 @@ from datetime import datetime, timezone, timedelta
 from types import SimpleNamespace
 
 from fastapi import FastAPI, Depends, Form, Request, Response
-from fastapi.responses import JSONResponse
-from sqlalchemy import delete
+from fastapi.responses import JSONResponse, HTMLResponse
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from frontend.auth.users import make_fastapi_users, make_manager_dep
 from frontend.auth.schemas import UserRead, UserCreate, UserUpdate
-from frontend.auth.email import MailBackend
+from frontend.auth.email import MailBackend, Mail, render_verification
 from frontend.auth.settings import Settings
-from frontend.auth.models import AccessToken, User
+from frontend.auth.models import AccessToken, User, EmailToken
 from frontend.auth.lockout import is_locked_out, record_attempt, clear_email_streak
 from frontend.auth.deps import make_current_user_dep, make_require_admin_dep
 
@@ -25,6 +25,7 @@ def build_app(*, get_session, settings: Settings, mail: MailBackend) -> FastAPI:
     fapi_users = make_fastapi_users(get_session, settings, mail)
     get_user_manager = make_manager_dep(get_session, settings, mail)
     settings_obj = settings
+    mail_obj = mail
 
     current_user_dep = make_current_user_dep(get_session)
     require_admin_dep = make_require_admin_dep(current_user_dep)
@@ -122,5 +123,50 @@ def build_app(*, get_session, settings: Settings, mail: MailBackend) -> FastAPI:
             "id": user.id, "email": user.email, "username": user.username,
             "is_verified": user.is_verified, "is_superuser": user.is_superuser,
         }
+
+    @app.get("/auth/verify", response_class=HTMLResponse)
+    async def verify(token: str, session: AsyncSession = Depends(get_session)):
+        q = select(EmailToken).where(
+            EmailToken.token == token, EmailToken.purpose == "verify"
+        )
+        et = (await session.execute(q)).scalar_one_or_none()
+        now = datetime.now(timezone.utc)
+        if et is None or et.used_at is not None:
+            return HTMLResponse("<h1>Link expired or already used.</h1>", status_code=410)
+        # Handle both naive and aware datetimes from database
+        expires_at = et.expires_at
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        if expires_at < now:
+            return HTMLResponse("<h1>Link expired or already used.</h1>", status_code=410)
+        et.used_at = now
+        await session.execute(
+            update(User).where(User.id == et.user_id).values(is_verified=True)
+        )
+        await session.commit()
+        return HTMLResponse("<h1>Email verified. You can close this tab.</h1>")
+
+    @app.post("/auth/resend-verification", status_code=202)
+    async def resend_verification(
+        user: User = Depends(current_user_dep),
+        session: AsyncSession = Depends(get_session),
+    ):
+        token = secrets.token_urlsafe(32)
+        session.add(EmailToken(
+            token=token,
+            user_id=user.id,
+            purpose="verify",
+            expires_at=datetime.now(timezone.utc) + timedelta(days=7),
+        ))
+        await session.commit()
+        body = render_verification(
+            username=user.username, base_url=settings_obj.base_url, token=token,
+        )
+        await mail_obj.send(Mail(
+            to=user.email,
+            subject="Confirm your Schieber account",
+            body=body,
+        ))
+        return {"status": "sent"}
 
     return app
