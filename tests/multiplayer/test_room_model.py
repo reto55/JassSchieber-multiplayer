@@ -6,13 +6,6 @@ from ausbau.room import (
 from frontend.auth.guest import Guest
 
 
-@pytest.fixture(autouse=True)
-def reset_rooms():
-    ROOMS.clear()
-    yield
-    ROOMS.clear()
-
-
 def test_positions_layout():
     assert POSITIONS == ('compo', 'compn', 'compe', 'comps')
 
