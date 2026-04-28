@@ -57,7 +57,45 @@ function dispatch(msg) {
   if (fn) fn(msg);
 }
 
-connect();
+async function bootAuth() {
+  try {
+    const r = await fetch("/auth/whoami", {credentials: "same-origin"});
+    const me = await r.json();
+    const el = document.getElementById("auth-info");
+    if (!el) return;
+    if (me.kind === "user") {
+      const verified = me.is_verified ? "✓" : "⚠";
+      el.innerHTML = `${escapeHtml(me.display_name)} (${verified}) ` +
+                     `<a href="/account" style="color:#9cf">Account</a> · ` +
+                     `<a href="#" id="logoutBtn" style="color:#9cf">Logout</a>`;
+      const btn = document.getElementById("logoutBtn");
+      if (btn) {
+        btn.addEventListener("click", async (e) => {
+          e.preventDefault();
+          await fetch("/auth/logout", {
+            method: "POST",
+            headers: {"X-Requested-With": "schieber"},
+          });
+          location.reload();
+        });
+      }
+    } else {
+      el.innerHTML = `Playing as ${escapeHtml(me.display_name)} ` +
+                     `<a href="/login" style="color:#9cf">Sign in</a> · ` +
+                     `<a href="/signup" style="color:#9cf">Sign up</a>`;
+    }
+  } catch (err) {
+    console.warn("auth boot failed", err);
+  }
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  }[c]));
+}
+
+bootAuth().then(connect);
 
 // ─── Render ───────────────────────────────────────────────────────────────────
 
