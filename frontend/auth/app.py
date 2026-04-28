@@ -4,14 +4,16 @@ from types import SimpleNamespace
 
 from fastapi import FastAPI, Depends, Form, Request, Response
 from fastapi.responses import JSONResponse
+from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from frontend.auth.users import make_fastapi_users, make_manager_dep
 from frontend.auth.schemas import UserRead, UserCreate, UserUpdate
 from frontend.auth.email import MailBackend
 from frontend.auth.settings import Settings
-from frontend.auth.models import AccessToken
+from frontend.auth.models import AccessToken, User
 from frontend.auth.lockout import is_locked_out, record_attempt, clear_email_streak
+from frontend.auth.deps import make_current_user_dep, make_require_admin_dep
 
 
 TTL_NORMAL = timedelta(hours=2)
@@ -22,6 +24,10 @@ def build_app(*, get_session, settings: Settings, mail: MailBackend) -> FastAPI:
     app = FastAPI()
     fapi_users = make_fastapi_users(get_session, settings, mail)
     get_user_manager = make_manager_dep(get_session, settings, mail)
+    settings_obj = settings
+
+    current_user_dep = make_current_user_dep(get_session)
+    require_admin_dep = make_require_admin_dep(current_user_dep)
 
     # Only mount the register router from fastapi-users.
     # /auth/login and /auth/logout are custom (Tasks 12 / 13) — needed for lockout
@@ -93,5 +99,28 @@ def build_app(*, get_session, settings: Settings, mail: MailBackend) -> FastAPI:
             samesite="lax",
         )
         return response
+
+    @app.post("/auth/logout", status_code=204)
+    async def logout(request: Request,
+                     session: AsyncSession = Depends(get_session)):
+        token = request.cookies.get("schieber_session")
+        if token:
+            await session.execute(delete(AccessToken).where(AccessToken.token == token))
+            await session.commit()
+        response = Response(status_code=204)
+        response.delete_cookie(
+            key="schieber_session",
+            secure=settings_obj.secure_cookie,
+            samesite="lax",
+            httponly=True,
+        )
+        return response
+
+    @app.get("/auth/me")
+    async def me(user: User = Depends(current_user_dep)):
+        return {
+            "id": user.id, "email": user.email, "username": user.username,
+            "is_verified": user.is_verified, "is_superuser": user.is_superuser,
+        }
 
     return app
