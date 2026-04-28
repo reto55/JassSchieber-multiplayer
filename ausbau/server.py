@@ -4,15 +4,18 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import secrets
 from datetime import datetime, timezone
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
+from slowapi.errors import RateLimitExceeded
 from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession
 from sqlalchemy import select
 from frontend.auth.guest import read_guest_cookie, GuestCookieError, Guest
 from frontend.auth.models import User as AuthUser, AccessToken
-from frontend.auth.db import make_engine, make_session_factory
+from frontend.auth.db import make_engine, make_session_factory, init_db
 from frontend.auth.settings import load_settings
+from frontend.auth.app import build_app
+from frontend.auth.email import ConsoleMailBackend, SmtpMailBackend
 from ausbau.game_session import GameSession
 
 app = FastAPI()
@@ -30,6 +33,34 @@ def _ensure_auth_initialised():
         _auth_settings = load_settings()
         _auth_engine = make_engine(_auth_settings.auth_db_url)
         _auth_factory = make_session_factory(_auth_engine)
+
+
+def _build_auth_app():
+    """Construct the auth sub-app and return its FastAPI instance.
+
+    Uses the global _auth_factory created by _ensure_auth_initialised, so
+    /auth/* and /ws share the same engine/session factory.
+    """
+    _ensure_auth_initialised()
+    if _auth_settings.mail_backend == "console":
+        mail = ConsoleMailBackend()
+    else:
+        mail = SmtpMailBackend(
+            host=_auth_settings.smtp_host,
+            port=_auth_settings.smtp_port,
+            user=_auth_settings.smtp_user,
+            password=_auth_settings.smtp_app_password,
+        )
+
+    async def get_session():
+        async with _auth_factory() as s:
+            yield s
+
+    return build_app(
+        get_session=get_session,
+        settings=_auth_settings,
+        mail=mail,
+    )
 
 
 async def _resolve_user_from_cookie(token: str):
@@ -84,6 +115,41 @@ app.mount("/static", StaticFiles(directory=_HTML5), name="static")
 @app.get("/")
 def index():
     return FileResponse(os.path.join(_HTML5, "game.html"))
+
+
+# ---------------------------------------------------------------------------
+# Auth sub-app wiring
+# ---------------------------------------------------------------------------
+# Routes are mounted lazily inside the startup hook so that importing this
+# module during tests (which monkeypatch _auth_settings / _auth_factory after
+# import) does NOT call load_settings() at module-load time.
+
+@app.exception_handler(RateLimitExceeded)
+async def _rate_limit_handler(request: Request, exc: RateLimitExceeded):
+    return JSONResponse(
+        {"detail": "rate limited"},
+        status_code=429,
+        headers={"Retry-After": "60"},
+    )
+
+
+@app.on_event("startup")
+async def _auth_init_db():
+    """Mount auth routes and create auth.db tables on first launch.
+
+    Done here (not at module load) so that importing ausbau.server during
+    tests does not require real auth env vars to be set.
+    """
+    _ensure_auth_initialised()
+    # Build auth sub-app and copy its routes onto the main app so that
+    # /auth/*, /admin/*, /login, /signup etc. are all reachable on the same
+    # uvicorn process without path-prefix games.  Middleware (slowapi) doesn't
+    # carry over via this mechanism — the RateLimitExceeded handler above
+    # covers it on the main app.
+    _auth_app = _build_auth_app()
+    for route in _auth_app.routes:
+        app.router.routes.append(route)
+    await init_db(_auth_engine)
 
 
 @app.websocket("/ws")
