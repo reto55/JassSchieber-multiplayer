@@ -25,6 +25,7 @@ from frontend.auth.lockout import is_locked_out, record_attempt, clear_email_str
 from frontend.auth.deps import make_current_user_dep, make_require_admin_dep
 from frontend.auth.passwords import validate_password
 from frontend.auth.ratelimit import make_limiter, LIMITS
+from frontend.auth.admin import make_admin_router
 
 
 TTL_NORMAL = timedelta(hours=2)
@@ -57,6 +58,8 @@ def build_app(*, get_session, settings: Settings, mail: MailBackend) -> FastAPI:
 
     current_user_dep = make_current_user_dep(get_session)
     require_admin_dep = make_require_admin_dep(current_user_dep)
+
+    app.include_router(make_admin_router(get_session, require_admin_dep))
 
     # Users router (PATCH /users/{id}, GET /users/me) — useful for admin/account UI later.
     # NOTE: We do NOT mount the fastapi-users register router here because we need

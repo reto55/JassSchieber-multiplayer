@@ -80,6 +80,11 @@ class UserManager(BaseUserManager[User, str]):
             subject="Confirm your Schieber account",
             body=body,
         ))
+        if user.email == self.settings.admin_bootstrap_email:
+            await self.db.refresh(user)
+            user.is_superuser = True
+            user.is_verified = True   # bootstrap admin is trusted
+            await self.db.commit()
 
     async def on_after_forgot_password(self, user: User, token: str, request=None):
         # fastapi-users issues its own JWT token; we replace with our own DB-backed
