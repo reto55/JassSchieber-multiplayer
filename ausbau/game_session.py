@@ -288,6 +288,26 @@ class GameSession:
         seat = self._seat(position)
         seat.websocket = None
 
+    async def _reclaim_seat(self, position: str, websocket, principal) -> None:
+        """Stub — full implementation in Task 13."""
+        seat = self._seat(position)
+        seat.websocket = websocket
+        seat.is_ai = False
+        seat.principal = principal
+        # Cancel any pending reconnect timer
+        task = self._reconnect_tasks.pop(position, None)
+        if task is not None and not task.done():
+            task.cancel()
+
+    def _room_resume_message_for(self, position):
+        """Stub — full implementation in Task 15."""
+        return {
+            "type": "room_resume",
+            "phase": self.state,
+            "your_position": position,
+            "scores": {"sn": self.point_sn, "ow": self.point_ow},
+        }
+
     def _initial_state(self, play: Play) -> dict:
         return {
             "type": "game_start",

@@ -64,48 +64,6 @@ def _build_auth_app():
     )
 
 
-async def _resolve_user_from_cookie(token: str):
-    """Return the User row for a valid session cookie, else None."""
-    _ensure_auth_initialised()
-    async with _auth_factory() as session:
-        q = select(AccessToken).where(
-            AccessToken.token == token,
-            AccessToken.expires_at > datetime.now(timezone.utc),
-        )
-        at = (await session.execute(q)).scalar_one_or_none()
-        if at is None:
-            return None
-        u = (await session.execute(
-            select(AuthUser).where(AuthUser.id == at.user_id)
-        )).scalar_one_or_none()
-        if u is None or not u.is_active:
-            return None
-        return u
-
-
-async def resolve_principal(ws):
-    """Resolve the WS connection to either an AuthUser or a Guest.
-
-    Priority: schieber_session cookie → AuthUser; schieber_guest cookie → Guest;
-    fall back to a fresh transient Guest (for programmatic clients that bypassed
-    /auth/whoami).
-    """
-    _ensure_auth_initialised()
-    sess = ws.cookies.get("schieber_session")
-    if sess:
-        u = await _resolve_user_from_cookie(sess)
-        if u is not None:
-            return u
-    guest_cookie = ws.cookies.get("schieber_guest")
-    if guest_cookie:
-        try:
-            return read_guest_cookie(guest_cookie, _auth_settings.secret_key)
-        except Exception:
-            # Covers GuestCookieError (bad signature), TypeError (non-string
-            # value) and any other unexpected error from a malformed cookie.
-            pass
-    return Guest(guest_id=secrets.token_hex(16))
-
 
 _BASE = os.path.dirname(os.path.abspath(__file__))
 _HTML5 = os.path.join(_BASE, "html5")
@@ -437,32 +395,84 @@ async def leave_spectator_endpoint(
 # WebSocket game endpoint
 # ---------------------------------------------------------------------------
 
-@app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
-    principal = await resolve_principal(websocket)
+@app.websocket("/ws/{code}")
+async def websocket_endpoint(websocket: WebSocket, code: str):
+    """Multi-WS endpoint per room. Resolves principal, attaches as seat or spectator."""
+    from ausbau.room import get_room
+
     await websocket.accept()
-    session = GameSession(end_game=1000, principal=principal)
+
+    # Resolve principal from cookies (manual — FastAPI Depends doesn't apply to WS)
+    _ensure_auth_initialised()
+    sess_token = websocket.cookies.get("schieber_session")
+    principal = None
+    if sess_token:
+        from sqlalchemy import select
+        from frontend.auth.models import AccessToken, User as AuthUser
+        from datetime import datetime, timezone
+        async with _auth_factory() as session:
+            q = select(AccessToken).where(
+                AccessToken.token == sess_token,
+                AccessToken.expires_at > datetime.now(timezone.utc),
+            )
+            at = (await session.execute(q)).scalar_one_or_none()
+            if at is not None:
+                u = (await session.execute(
+                    select(AuthUser).where(AuthUser.id == at.user_id)
+                )).scalar_one_or_none()
+                if u is not None and u.is_active:
+                    principal = u
+
+    if principal is None:
+        guest_cookie = websocket.cookies.get("schieber_guest")
+        if guest_cookie:
+            from frontend.auth.guest import read_guest_cookie, GuestCookieError
+            try:
+                principal = read_guest_cookie(guest_cookie, _auth_settings.secret_key)
+            except GuestCookieError:
+                pass
+
+    if principal is None:
+        await websocket.close(code=1008, reason="no auth cookie")
+        return
+
+    # Find room
+    room = get_room(code)
+    if room is None:
+        await websocket.close(code=1008, reason="room not found")
+        return
+
+    # Attach as seat or spectator
+    seat = room._seat_for_principal(principal)
+    spec = room._spectator_for_principal(principal)
+
+    if seat is not None:
+        await room._reclaim_seat(seat.position, websocket, principal)
+    elif spec is not None:
+        spec.websocket = websocket
+        await websocket.send_json(room._room_resume_message_for(None))
+    else:
+        await websocket.close(code=1008, reason="no seat or spectator slot")
+        return
+
+    # WS reader loop: dequeue and route to seat's queue
     try:
-        await session.run(websocket)
+        while True:
+            msg = await websocket.receive_json()
+            if seat is not None:
+                # Re-resolve seat in case position changed (mid-game swap)
+                current_seat = room._seat_for_principal(principal)
+                if current_seat is not None:
+                    current_seat.incoming.put_nowait(msg)
+            else:
+                # Spectator sent a message — error reply, don't break
+                try:
+                    await websocket.send_json({"type": "error",
+                                               "message": "spectators are read-only"})
+                except Exception:
+                    break
     except WebSocketDisconnect:
-        # Clean client-drop — socket is already gone, nothing to send.
-        pass
-    except Exception as exc:
-        # Per the schieber-protocol skill invariant §5 ("No silent failures;
-        # server responds with `error` …"), a bare close on an unexpected
-        # backend exception is a contract violation. Send one last-ditch
-        # protocol-shaped error payload before closing. If that send itself
-        # fails (e.g. the socket is already half-closed), swallow the
-        # secondary failure — the client is already unreachable.
-        print(f"[ws error] {exc!r}", file=sys.stderr)
-        try:
-            await websocket.send_json({
-                "type": "error",
-                "message": "Interner Serverfehler. Bitte neu laden.",
-            })
-        except Exception:
-            pass
-        try:
-            await websocket.close()
-        except Exception:
-            pass
+        if seat is not None:
+            await room._disconnect_seat(seat.position)
+        elif spec is not None and spec in room.spectators:
+            room.spectators.remove(spec)

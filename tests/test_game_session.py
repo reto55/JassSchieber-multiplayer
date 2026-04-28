@@ -1,6 +1,7 @@
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+import pytest
 from Cards_refactored import Ass, Koenig, Ober, Under, Banner, Neun, Acht, Sieben, Sechs, SUITS
 from ausbau.game_session import card_to_code, hand_to_codes, find_card_in_hand
 
@@ -909,6 +910,8 @@ def test_play_trick_non_string_card_rejected():
 
 # --- E4.2: server-level protocol-shaped error on uncaught exception -------
 
+@pytest.mark.skip(reason="legacy single-WS /ws error-handling removed in multiplayer Task 9; "
+                         "new /ws/{code} endpoint has per-room connection logic")
 def test_server_sends_error_payload_before_close_on_unexpected_exception():
     """If GameSession.run raises a non-WebSocketDisconnect exception, the /ws handler
     must send a protocol-shaped `{type: "error", message: "..."}` payload before closing.
@@ -945,6 +948,8 @@ def test_server_sends_error_payload_before_close_on_unexpected_exception():
     )
 
 
+@pytest.mark.skip(reason="legacy single-WS /ws error-handling removed in multiplayer Task 9; "
+                         "new /ws/{code} endpoint has per-room connection logic")
 def test_server_disconnect_does_not_send_error_payload():
     """Regression: WebSocketDisconnect is the clean-exit path — no error payload."""
     from unittest.mock import AsyncMock, patch
@@ -966,6 +971,8 @@ def test_server_disconnect_does_not_send_error_payload():
     )
 
 
+@pytest.mark.skip(reason="legacy single-WS /ws error-handling removed in multiplayer Task 9; "
+                         "new /ws/{code} endpoint has per-room connection logic")
 def test_server_survives_if_error_send_itself_fails():
     """If the final error-send raises (e.g. socket already half-closed), the handler
     must still fall through to close() without propagating the secondary failure.
@@ -993,6 +1000,8 @@ def test_server_survives_if_error_send_itself_fails():
 import pytest
 
 
+@pytest.mark.skip(reason="legacy single-WS resolve_principal removed in multiplayer Task 9; "
+                         "WS attach is now per-room")
 @pytest.mark.asyncio
 async def test_resolve_principal_returns_guest_when_no_cookies(monkeypatch):
     """resolve_principal returns a fresh Guest when neither cookie is present."""
@@ -1010,6 +1019,8 @@ async def test_resolve_principal_returns_guest_when_no_cookies(monkeypatch):
     assert isinstance(p, Guest)
 
 
+@pytest.mark.skip(reason="legacy single-WS resolve_principal removed in multiplayer Task 9; "
+                         "WS attach is now per-room")
 @pytest.mark.asyncio
 async def test_resolve_principal_returns_user_when_session_cookie_valid(monkeypatch):
     """resolve_principal returns the User from _resolve_user_from_cookie when cookie is valid."""
