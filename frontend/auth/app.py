@@ -21,7 +21,7 @@ from frontend.auth.passwords import validate_password
 TTL_NORMAL = timedelta(hours=2)
 TTL_REMEMBER = timedelta(days=30)
 
-pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_ctx = CryptContext(schemes=["bcrypt", "argon2"], deprecated="auto")
 
 
 def build_app(*, get_session, settings: Settings, mail: MailBackend) -> FastAPI:
@@ -214,6 +214,27 @@ def build_app(*, get_session, settings: Settings, mail: MailBackend) -> FastAPI:
         u.hashed_password = pwd_ctx.hash(new_password)
         et.used_at = datetime.now(timezone.utc)
         await session.execute(delete(AccessToken).where(AccessToken.user_id == u.id))
+        await session.commit()
+        return {"status": "ok"}
+
+    @app.post("/auth/change-password")
+    async def change_password(
+        payload: dict,
+        request: Request,
+        user: User = Depends(current_user_dep),
+        session: AsyncSession = Depends(get_session),
+    ):
+        current = payload.get("current_password", "")
+        new = payload.get("new_password", "")
+        u = (await session.execute(select(User).where(User.id == user.id))).scalar_one()
+        if not pwd_ctx.verify(current, u.hashed_password):
+            raise HTTPException(401, "wrong current password")
+        validate_password(new, username=u.username, email=u.email)
+        u.hashed_password = pwd_ctx.hash(new)
+        cur_token = request.cookies.get("schieber_session")
+        await session.execute(delete(AccessToken).where(
+            AccessToken.user_id == u.id, AccessToken.token != cur_token
+        ))
         await session.commit()
         return {"status": "ok"}
 
