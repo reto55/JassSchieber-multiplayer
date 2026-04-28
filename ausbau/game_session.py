@@ -142,11 +142,38 @@ def detect_stock(hand: dict, operator: str) -> bool:
 
 
 class GameSession:
-    def __init__(self, end_game: int = 1000, principal=None):
+    def __init__(
+        self,
+        *,
+        code: str = "",
+        host_principal_id: str = "",
+        variant=None,                     # type: Variant | None
+        end_game: int = 1000,
+        principal=None,                   # legacy: from sub-project B's WS principal injection
+    ):
+        from ausbau.room import POSITIONS, Seat, Variant
+        self.code = code
+        self.variant = variant if variant is not None else Variant()
         self.end_game = end_game
-        self.principal = principal
+        self.host_principal_id = host_principal_id
+        self.principal = principal        # legacy compatibility for old /ws code path
+
+        # Lobby state
+        self.seats = [Seat(position=POSITIONS[i]) for i in range(4)]
+        self.spectators = []
+        self.state = "lobby"
+
+        # Game state (set when start() is called in Part 2)
         self.point_sn = 0
         self.point_ow = 0
+        self.current_play = None
+
+        # Concurrency primitives
+        self._lock = asyncio.Lock()
+        self._reconnect_tasks = {}
+        self._game_task = None
+        self._completed_tricks = []
+        self._swap_requests = {}
 
     def _initial_state(self, play: Play) -> dict:
         return {
