@@ -5,6 +5,9 @@ from types import SimpleNamespace
 
 from fastapi import FastAPI, Depends, Form, Request, Response, HTTPException, Body
 from fastapi.responses import JSONResponse, HTMLResponse
+from fastapi_users import exceptions as fapi_exceptions
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from passlib.context import CryptContext
@@ -21,6 +24,7 @@ from frontend.auth.tombstone import hash_email, hash_email as _he, hash_username
 from frontend.auth.lockout import is_locked_out, record_attempt, clear_email_streak
 from frontend.auth.deps import make_current_user_dep, make_require_admin_dep
 from frontend.auth.passwords import validate_password
+from frontend.auth.ratelimit import make_limiter, LIMITS
 
 
 TTL_NORMAL = timedelta(hours=2)
@@ -31,6 +35,21 @@ pwd_ctx = CryptContext(schemes=["bcrypt", "argon2"], deprecated="auto")
 
 def build_app(*, get_session, settings: Settings, mail: MailBackend) -> FastAPI:
     app = FastAPI()
+
+    # Rate limiter — instantiated inside build_app so each app instance has its
+    # own in-memory storage (avoids state leaking between tests).
+    limiter = make_limiter()
+    app.state.limiter = limiter
+    app.add_middleware(SlowAPIMiddleware)
+
+    @app.exception_handler(RateLimitExceeded)
+    async def _rate_limit_handler(request: Request, exc: RateLimitExceeded):
+        return JSONResponse(
+            {"detail": "rate limited"},
+            status_code=429,
+            headers={"Retry-After": "60"},
+        )
+
     fapi_users = make_fastapi_users(get_session, settings, mail)
     get_user_manager = make_manager_dep(get_session, settings, mail)
     settings_obj = settings
@@ -39,21 +58,32 @@ def build_app(*, get_session, settings: Settings, mail: MailBackend) -> FastAPI:
     current_user_dep = make_current_user_dep(get_session)
     require_admin_dep = make_require_admin_dep(current_user_dep)
 
-    # Only mount the register router from fastapi-users.
-    # /auth/login and /auth/logout are custom (Tasks 12 / 13) — needed for lockout
-    # and remember-me. We deliberately skip get_auth_router to avoid duplicate-route
-    # registration conflicts.
-    app.include_router(
-        fapi_users.get_register_router(UserRead, UserCreate),
-        prefix="/auth",
-    )
     # Users router (PATCH /users/{id}, GET /users/me) — useful for admin/account UI later.
+    # NOTE: We do NOT mount the fastapi-users register router here because we need
+    # to apply a rate limit on POST /auth/register. Instead we implement a thin
+    # wrapper below that delegates to the UserManager directly.
     app.include_router(
         fapi_users.get_users_router(UserRead, UserUpdate),
         prefix="/users",
     )
 
+    @app.post("/auth/register", response_model=UserRead, status_code=201)
+    @limiter.limit(LIMITS["signup"])
+    async def register(
+        request: Request,
+        user_create: UserCreate,
+        manager=Depends(get_user_manager),
+    ):
+        try:
+            created = await manager.create(user_create, safe=True, request=request)
+        except fapi_exceptions.UserAlreadyExists:
+            raise HTTPException(status_code=400, detail="REGISTER_USER_ALREADY_EXISTS")
+        except fapi_exceptions.InvalidPasswordException as e:
+            raise HTTPException(status_code=422, detail=str(e.reason))
+        return UserRead.model_validate(created)
+
     @app.post("/auth/login", status_code=204)
+    @limiter.limit(LIMITS["login"])
     async def login(
         request: Request,
         username: str = Form(...),
@@ -210,7 +240,9 @@ def build_app(*, get_session, settings: Settings, mail: MailBackend) -> FastAPI:
         return {"status": "sent"}
 
     @app.post("/auth/forgot", status_code=202)
-    async def forgot(payload: dict, session: AsyncSession = Depends(get_session)):
+    @limiter.limit(LIMITS["forgot"])
+    @limiter.limit(LIMITS["forgot_day"])
+    async def forgot(request: Request, payload: dict, session: AsyncSession = Depends(get_session)):
         email = payload.get("email", "").lower()
         u = (await session.execute(
             select(User).where(User.email == email, User.is_active == True)
@@ -230,7 +262,8 @@ def build_app(*, get_session, settings: Settings, mail: MailBackend) -> FastAPI:
         return {"status": "ok"}
 
     @app.post("/auth/reset")
-    async def reset(payload: dict, session: AsyncSession = Depends(get_session)):
+    @limiter.limit(LIMITS["reset"])
+    async def reset(request: Request, payload: dict, session: AsyncSession = Depends(get_session)):
         token = payload.get("token", "")
         new_password = payload.get("new_password", "")
         et = (await session.execute(
