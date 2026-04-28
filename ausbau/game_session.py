@@ -249,6 +249,45 @@ class GameSession:
             except Exception:
                 pass
 
+    async def send_to_seat(self, position: str, msg: dict) -> None:
+        """Send a message to one seat's WS. No-op if AI or disconnected."""
+        seat = self._seat(position)
+        if seat.websocket is None or seat.is_ai:
+            return
+        try:
+            await seat.websocket.send_json(msg)
+        except Exception:
+            await self._disconnect_seat(position)
+
+    async def broadcast(self, msg: dict, *, except_seat: str | None = None) -> None:
+        """Send to all seats + spectators. except_seat skips one seat."""
+        for seat in self.seats:
+            if seat.position != except_seat:
+                await self.send_to_seat(seat.position, msg)
+        for spec in list(self.spectators):
+            try:
+                if spec.websocket is not None:
+                    await spec.websocket.send_json(msg)
+            except Exception:
+                self.spectators.remove(spec)
+
+    async def broadcast_per_seat(self, msg_factory) -> None:
+        """Each seat receives msg_factory(seat). Spectators receive msg_factory(None)."""
+        for seat in self.seats:
+            await self.send_to_seat(seat.position, msg_factory(seat))
+        tv_msg = msg_factory(None)
+        for spec in list(self.spectators):
+            try:
+                if spec.websocket is not None:
+                    await spec.websocket.send_json(tv_msg)
+            except Exception:
+                self.spectators.remove(spec)
+
+    async def _disconnect_seat(self, position: str) -> None:
+        """Stub — full implementation in Task 14."""
+        seat = self._seat(position)
+        seat.websocket = None
+
     def _initial_state(self, play: Play) -> dict:
         return {
             "type": "game_start",
