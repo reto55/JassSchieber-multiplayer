@@ -11,3 +11,7 @@ venv/
 # harness workspace (intermediate agent artifacts)
 _workspace/
 _workspace_prev/
+
+.env
+auth.db
+auth.db-journal
