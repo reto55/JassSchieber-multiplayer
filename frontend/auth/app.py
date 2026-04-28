@@ -133,6 +133,37 @@ def build_app(*, get_session, settings: Settings, mail: MailBackend) -> FastAPI:
             "is_verified": user.is_verified, "is_superuser": user.is_superuser,
         }
 
+    @app.get("/auth/export")
+    async def export_account(
+        user: User = Depends(current_user_dep),
+        session: AsyncSession = Depends(get_session),
+    ):
+        access_q = await session.execute(
+            select(AccessToken).where(AccessToken.user_id == user.id)
+        )
+        email_q = await session.execute(
+            select(EmailToken).where(EmailToken.user_id == user.id)
+        )
+        return {
+            "user": {
+                "id": user.id, "email": user.email, "username": user.username,
+                "is_active": user.is_active, "is_verified": user.is_verified,
+                "is_superuser": user.is_superuser,
+                "created_at": user.created_at.isoformat(),
+                "last_login_at": user.last_login_at.isoformat() if user.last_login_at else None,
+            },
+            "access_tokens": [
+                {"created_at": at.created_at.isoformat(),
+                 "expires_at": at.expires_at.isoformat()}
+                for at in access_q.scalars()
+            ],
+            "email_tokens": [
+                {"purpose": et.purpose, "expires_at": et.expires_at.isoformat(),
+                 "used_at": et.used_at.isoformat() if et.used_at else None}
+                for et in email_q.scalars()
+            ],
+        }
+
     @app.get("/auth/verify", response_class=HTMLResponse)
     async def verify(token: str, session: AsyncSession = Depends(get_session)):
         q = select(EmailToken).where(
