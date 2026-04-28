@@ -1,10 +1,12 @@
 import secrets
 import uuid as _uuid
 from datetime import datetime, timezone, timedelta
+from pathlib import Path
 from types import SimpleNamespace
 
 from fastapi import FastAPI, Depends, Form, Request, Response, HTTPException, Body
 from fastapi.responses import JSONResponse, HTMLResponse
+from fastapi.templating import Jinja2Templates
 from fastapi_users import exceptions as fapi_exceptions
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
@@ -472,5 +474,13 @@ def build_app(*, get_session, settings: Settings, mail: MailBackend) -> FastAPI:
             httponly=True,
         )
         return resp
+
+    # Wire page routes (HTML templates)
+    templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
+
+    for name in ("login", "signup", "forgot", "reset", "account", "admin"):
+        @app.get(f"/{name}", response_class=HTMLResponse)
+        async def _page(request: Request, _name=name):
+            return templates.TemplateResponse(request, f"{_name}.html")
 
     return app

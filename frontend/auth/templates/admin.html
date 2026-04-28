@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Admin{% endblock %}
+{% block body %}
+<h1>Admin</h1>
+<input id="q" placeholder="Search by email or username">
+<table id="tbl"><thead><tr>
+<th>Username</th><th>Email</th><th>Active</th><th>Verified</th><th>Super</th><th>Actions</th>
+</tr></thead><tbody></tbody></table>
+<h2>Recent audit</h2>
+<pre id="audit"></pre>
+{% endblock %}
+{% block scripts %}<script>
+async function loadUsers(q="") {
+  const r = await fetch("/admin/users?q=" + encodeURIComponent(q));
+  if (r.status === 401 || r.status === 403) { location.href = "/login"; return; }
+  const tb = document.querySelector("#tbl tbody");
+  tb.innerHTML = "";
+  for (const u of await r.json()) {
+    const tr = document.createElement("tr");
+    const style = u.is_superuser ? "font-weight:bold" : (!u.is_active ? "color:#888;font-style:italic" : "");
+    tr.style.cssText = style;
+    tr.innerHTML = `<td>${u.username}</td><td>${u.email}</td>
+                    <td>${u.is_active}</td><td>${u.is_verified}</td><td>${u.is_superuser}</td>
+                    <td>
+                      <button data-act="${u.is_active?'ban':'unban'}">${u.is_active?'Ban':'Unban'}</button>
+                      <button data-act="${u.is_superuser?'demote':'promote'}">${u.is_superuser?'Demote':'Promote'}</button>
+                      ${u.is_verified?'':'<button data-act="force-verify">Force-verify</button>'}
+                    </td>`;
+    tr.querySelectorAll("button").forEach(btn => btn.addEventListener("click", async () => {
+      await fetch(`/admin/users/${u.id}/${btn.dataset.act}`,
+                  {method:"POST", headers: csrfHeaders, body: "{}"});
+      loadUsers(document.getElementById("q").value);
+    }));
+    tb.appendChild(tr);
+  }
+}
+async function loadAudit() {
+  const r = await fetch("/admin/audit");
+  if (r.ok) document.getElementById("audit").textContent =
+    JSON.stringify(await r.json(), null, 2);
+}
+document.getElementById("q").addEventListener("input", e => loadUsers(e.target.value));
+loadUsers(); loadAudit();
+</script>{% endblock %}

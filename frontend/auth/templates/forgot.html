@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Forgot password{% endblock %}
+{% block body %}
+<h1>Forgot password</h1>
+<form id="f">
+  <input name="email" type="email" placeholder="Your email" required>
+  <button>Send reset link</button>
+</form>
+<p id="msg" class="ok"></p>
+{% endblock %}
+{% block scripts %}<script>
+document.getElementById("f").addEventListener("submit", async e => {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  const body = JSON.stringify(Object.fromEntries(fd));
+  await fetch("/auth/forgot", {method:"POST", body, headers: csrfHeaders});
+  document.getElementById("msg").textContent = "If that email exists, a reset link is on its way.";
+});
+</script>{% endblock %}

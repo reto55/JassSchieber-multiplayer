@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html><head>
+<meta charset="utf-8"><title>{% block title %}Schieber{% endblock %}</title>
+<style>
+body{font-family:system-ui,sans-serif;max-width:480px;margin:2rem auto;padding:1rem}
+form{display:flex;flex-direction:column;gap:.6rem}
+input,button{padding:.5rem;font:inherit}
+.err{color:#c00}.ok{color:#070}
+.banner{background:#ffd;padding:.5rem;margin-bottom:1rem;border-left:3px solid #ca0}
+</style>
+</head><body>
+<header><a href="/">Schieber</a></header>
+{% block body %}{% endblock %}
+<script>
+const csrfHeaders = {"Content-Type": "application/json", "X-Requested-With": "schieber"};
+</script>
+{% block scripts %}{% endblock %}
+</body></html>

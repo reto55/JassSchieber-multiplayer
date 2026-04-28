@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Account{% endblock %}
+{% block body %}
+<h1>Account</h1>
+<section><h2>Identity</h2><pre id="me">…</pre></section>
+
+<section><h2>Change password</h2>
+<form id="pw">
+  <input name="current_password" type="password" placeholder="Current password" required>
+  <input name="new_password" type="password" placeholder="New password" required minlength="10">
+  <button>Update password</button>
+</form></section>
+
+<section><h2>Change email</h2>
+<form id="em">
+  <input name="new_email" type="email" placeholder="New email" required>
+  <input name="current_password" type="password" placeholder="Current password" required>
+  <button>Send confirmation</button>
+</form></section>
+
+<section><h2>Export my data</h2>
+<a href="/auth/export" download="schieber-account.json">Download JSON</a></section>
+
+<section><h2>Delete account</h2>
+<form id="del">
+  <input name="current_password" type="password" placeholder="Current password" required>
+  <button style="background:#c00;color:#fff">Delete permanently</button>
+</form></section>
+{% endblock %}
+{% block scripts %}<script>
+async function load() {
+  const r = await fetch("/auth/me");
+  if (!r.ok) { location.href = "/login"; return; }
+  document.getElementById("me").textContent = JSON.stringify(await r.json(), null, 2);
+}
+function bind(id, url, method="POST") {
+  document.getElementById(id).addEventListener("submit", async e => {
+    e.preventDefault();
+    const body = JSON.stringify(Object.fromEntries(new FormData(e.target)));
+    const r = await fetch(url, {method, body, headers: csrfHeaders});
+    alert(r.ok ? "ok" : `failed (${r.status})`);
+    if (r.ok && id === "del") location.href = "/";
+  });
+}
+load();
+bind("pw", "/auth/change-password");
+bind("em", "/auth/change-email");
+bind("del", "/auth/account", "DELETE");
+</script>{% endblock %}
