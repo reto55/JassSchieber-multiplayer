@@ -4,9 +4,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import secrets
 from datetime import datetime, timezone
-from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Request, Response, WebSocket, WebSocketDisconnect, HTTPException, Body
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
+from typing import Optional
 from slowapi.errors import RateLimitExceeded
 from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession
 from sqlalchemy import select
@@ -151,6 +152,125 @@ async def _auth_init_db():
         app.router.routes.append(route)
     await init_db(_auth_engine)
 
+
+# ---------------------------------------------------------------------------
+# Room CRUD helpers
+# ---------------------------------------------------------------------------
+
+async def _get_principal(request: Request, response: Response):
+    """Resolve the current principal (User or Guest) for the current request."""
+    _ensure_auth_initialised()
+    async with _auth_factory() as session:
+        sess_token = request.cookies.get("schieber_session")
+        if sess_token:
+            from sqlalchemy import select as _select
+            from frontend.auth.models import AccessToken as _AccessToken, User as _User
+            from datetime import datetime as _dt, timezone as _tz
+            q = _select(_AccessToken).where(
+                _AccessToken.token == sess_token,
+                _AccessToken.expires_at > _dt.now(_tz.utc),
+            )
+            at = (await session.execute(q)).scalar_one_or_none()
+            if at is not None:
+                u = (await session.execute(
+                    _select(_User).where(_User.id == at.user_id)
+                )).scalar_one_or_none()
+                if u is not None and u.is_active:
+                    return u
+
+        guest_cookie = request.cookies.get("schieber_guest")
+        if guest_cookie:
+            from frontend.auth.guest import read_guest_cookie, GuestCookieError
+            try:
+                return read_guest_cookie(guest_cookie, _auth_settings.secret_key)
+            except GuestCookieError:
+                pass
+
+        from frontend.auth.guest import issue_guest_cookie
+        new_cookie, guest = issue_guest_cookie(_auth_settings.secret_key)
+        secure = getattr(_auth_settings, "secure_cookie", False)
+        response.set_cookie(
+            key="schieber_guest",
+            value=new_cookie,
+            max_age=30 * 24 * 60 * 60,
+            httponly=True,
+            secure=secure,
+            samesite="lax",
+        )
+        return guest
+
+
+def _seat_to_dict(seat, room) -> dict:
+    from ausbau.room import principal_id
+    return {
+        "position": seat.position,
+        "display_name": seat.display_name(),
+        "is_ai": seat.is_ai,
+        "connected": seat.websocket is not None and not seat.is_ai,
+        "is_host": (
+            seat.principal is not None
+            and principal_id(seat.principal) == room.host_principal_id
+        ),
+        "principal_id": (
+            principal_id(seat.principal) if seat.principal is not None else None
+        ),
+    }
+
+
+def _room_state_dict(room) -> dict:
+    return {
+        "code": room.code,
+        "host_principal_id": room.host_principal_id,
+        "state": room.state,
+        "variant": {
+            "trumpf_bock": room.variant.trumpf_bock,
+            "match_bonus": room.variant.match_bonus,
+            "stoeck": room.variant.stoeck,
+        },
+        "end_game": room.end_game,
+        "seats": [_seat_to_dict(s, room) for s in room.seats],
+        "spectator_count": len(room.spectators),
+        "scores": {"sn": room.point_sn, "ow": room.point_ow},
+    }
+
+
+@app.post("/rooms", status_code=201)
+async def create_room_endpoint(
+    request: Request,
+    response: Response,
+    payload: Optional[dict] = Body(default={}),
+):
+    from ausbau.room import create_room, Variant
+    principal = await _get_principal(request, response)
+    variant_data = (payload or {}).get("variant", {}) or {}
+    variant = Variant(
+        trumpf_bock=variant_data.get("trumpf_bock", False),
+        match_bonus=variant_data.get("match_bonus", True),
+        stoeck=variant_data.get("stoeck", True),
+    )
+    room = create_room(host=principal, variant=variant)
+    return _room_state_dict(room)
+
+
+@app.get("/rooms/mine")
+async def rooms_mine_endpoint(request: Request, response: Response):
+    from ausbau.room import find_rooms_for_principal
+    principal = await _get_principal(request, response)
+    return find_rooms_for_principal(principal)
+
+
+@app.get("/rooms/{code}")
+async def get_room_endpoint(code: str):
+    from ausbau.room import get_room
+    room = get_room(code)
+    if room is None:
+        raise HTTPException(404, "room not found")
+    return _room_state_dict(room)
+
+
+# ---------------------------------------------------------------------------
+# WebSocket game endpoint
+# ---------------------------------------------------------------------------
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
