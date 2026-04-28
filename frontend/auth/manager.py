@@ -2,7 +2,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Optional
 import secrets
 from fastapi import Request
-from fastapi_users import BaseUserManager, exceptions
+from fastapi_users import BaseUserManager, exceptions, InvalidPasswordException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
@@ -29,13 +29,27 @@ class UserManager(BaseUserManager[User, str]):
         return str(value)
 
     async def validate_password(self, password: str, user) -> None:
-        validate_password(
-            password,
-            username=getattr(user, "username", "") or "",
-            email=getattr(user, "email", "") or "",
-        )
+        try:
+            validate_password(
+                password,
+                username=getattr(user, "username", "") or "",
+                email=getattr(user, "email", "") or "",
+            )
+        except Exception as exc:
+            # Re-raise as fastapi-users' InvalidPasswordException so the register
+            # router can catch it and return a proper 400 response.
+            raise InvalidPasswordException(reason=str(exc)) from exc
 
     async def create(self, user_create, safe=False, request=None):
+        # Check for duplicate username (fastapi-users only checks email)
+        existing_username = (
+            await self.db.execute(
+                select(User).where(User.username == user_create.username)
+            )
+        ).scalars().first()
+        if existing_username is not None:
+            raise exceptions.UserAlreadyExists()
+
         # Block tombstone collisions <30d
         cutoff = datetime.now(timezone.utc) - timedelta(days=30)
         eh = hash_email(user_create.email)
