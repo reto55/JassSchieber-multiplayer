@@ -39,6 +39,14 @@ section h2, section h3 { margin: 0 0 0.5rem 0; }
 }
 .seats li.me { background: #eef6ff; font-weight: 600; }
 
+.seats select.ai-difficulty {
+  margin-left: 0.5rem;
+  font-size: 0.85rem;
+}
+.seats select.ai-difficulty:disabled {
+  opacity: 0.6;
+}
+
 .actions {
   display: flex;
   gap: 0.5rem;

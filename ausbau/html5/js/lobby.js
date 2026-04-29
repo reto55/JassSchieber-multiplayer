@@ -73,6 +73,19 @@ function render() {
   $code.textContent = currentRoomState.code;
   $stateValue.textContent = currentRoomState.state;
 
+  // Derive host / lobby state up front so it is available when rendering
+  // per-seat AI dropdowns (which need to know whether to enable themselves).
+  const isLobby = currentRoomState.state === 'lobby';
+  const seated = myMembership && myMembership.role === 'seat';
+  const spectating = myMembership && myMembership.role === 'spectator';
+  let amHost = false;
+  if (seated) {
+    const mySeatRow = currentRoomState.seats.find(
+      (s) => s.position === myMembership.position
+    );
+    amHost = !!(mySeatRow && mySeatRow.is_host);
+  }
+
   $seats.innerHTML = '';
   for (const s of currentRoomState.seats) {
     const li = document.createElement('li');
@@ -86,6 +99,33 @@ function render() {
         && myMembership.position === s.position) {
       li.classList.add('me');
     }
+
+    if (s.is_ai) {
+      const sel = document.createElement('select');
+      sel.className = 'ai-difficulty';
+      sel.dataset.position = s.position;
+      for (const lvl of ['easy', 'medium', 'hard']) {
+        const opt = document.createElement('option');
+        opt.value = lvl;
+        opt.textContent = lvl;
+        if (lvl === s.ai_difficulty) opt.selected = true;
+        sel.appendChild(opt);
+      }
+      sel.disabled = !amHost || !isLobby;
+      sel.addEventListener('change', async (ev) => {
+        try {
+          await api(`/rooms/${currentRoomState.code}/ai_difficulty`, {
+            method: 'POST',
+            body: { position: ev.target.dataset.position, level: ev.target.value },
+          });
+        } catch (err) {
+          $error.textContent = err.message;
+          await refresh();   // revert dropdown to server state
+        }
+      });
+      li.appendChild(sel);
+    }
+
     $seats.appendChild(li);
   }
 
@@ -97,23 +137,11 @@ function render() {
   }
   $spectatorCount.textContent = currentRoomState.spectator_count;
 
-  // Button gating: derive from membership + room state.
-  const isLobby = currentRoomState.state === 'lobby';
-  const seated = myMembership && myMembership.role === 'seat';
-  const spectating = myMembership && myMembership.role === 'spectator';
-  let isHost = false;
-  if (seated) {
-    const mySeat = currentRoomState.seats.find(
-      (s) => s.position === myMembership.position
-    );
-    isHost = !!(mySeat && mySeat.is_host);
-  }
-
   $btnJoin.hidden = !isLobby || !!seated;
   $btnLeave.hidden = !seated;
   $btnSpectate.hidden = !!seated || !!spectating;
   $btnStopSpectate.hidden = !spectating;
-  $btnStart.hidden = !(isHost && isLobby);
+  $btnStart.hidden = !(amHost && isLobby);
 }
 
 async function withErrors(fn) {

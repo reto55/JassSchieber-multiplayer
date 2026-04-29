@@ -53,3 +53,17 @@ async def test_lobby_static_assets_served(client):
 
     r_css = await client.get("/static/css/lobby.css")
     assert r_css.status_code == 200
+
+
+async def test_lobby_js_references_ai_difficulty_endpoint(client):
+    """Task 12: lobby JS wires the host-only AI-difficulty dropdown.
+
+    Smoke check that the per-AI-seat dropdown markup + endpoint plumbing
+    landed in the shipped JS asset. We assert by string match (DOM behaviour
+    is verified manually per spec §11.5).
+    """
+    r = await client.get("/static/js/lobby.js")
+    assert r.status_code == 200
+    body = r.text
+    assert "ai_difficulty" in body  # endpoint + seat field
+    assert "ai-difficulty" in body  # CSS class on the <select>
