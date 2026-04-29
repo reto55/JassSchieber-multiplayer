@@ -516,6 +516,22 @@ class GameSession:
         seat_a = self._seat(a)
         seat_b = self._seat(b)
 
+        # Connected re-check: if either party went offline between
+        # `_accept_seat_swap` and the trick boundary, abort the swap and
+        # fire `seat_swap_expired` to whoever is still around. We reuse
+        # `seat_swap_expired` (rather than a new `seat_swap_aborted` type)
+        # to keep the protocol surface stable — the frontend already
+        # handles this message.
+        if seat_a.websocket is None or seat_b.websocket is None:
+            for pos in (a, b):
+                await self.send_to_seat(pos, {
+                    "type": "seat_swap_expired",
+                    "from_position": a,
+                })
+            return
+
+        # Atomic swap: no awaits between these four lines (asyncio single-thread guarantee).
+        # Adding an await inside this section breaks message routing during the swap window.
         seat_a.principal, seat_b.principal = seat_b.principal, seat_a.principal
         seat_a.websocket, seat_b.websocket = seat_b.websocket, seat_a.websocket
         seat_a.connected_since, seat_b.connected_since = (

@@ -494,6 +494,13 @@ async def seat_swap_endpoint(
     accept = bool(body.get("accept", False))
 
     if not accept:
+        # Reject if any other request is already aimed at the same target seat,
+        # regardless of who sent it. Reviewer guidance: spec is silent, but a
+        # second pending arrow-into would let two requesters race for the same
+        # acceptor click and only one can win — fail fast on the second writer.
+        for (existing_from, existing_to) in list(room._swap_requests.keys()):
+            if existing_to == target.position and existing_from != caller_seat.position:
+                raise HTTPException(409, "another swap pending for that seat")
         await room._record_seat_swap_request(
             caller_seat.position, target.position, caller_seat.display_name(),
         )

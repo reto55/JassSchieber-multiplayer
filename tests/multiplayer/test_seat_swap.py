@@ -169,6 +169,49 @@ async def test_commit_pending_swap_noop_when_no_pending():
         assert wss[pos].last_sent_of_type("seat_swap_committed") is None
 
 
+async def test_commit_aborts_if_either_seat_disconnected_post_accept():
+    """If a side disconnects between accept and the trick boundary, the
+    swap aborts and ``seat_swap_expired`` fires to whoever is still
+    connected. Principals/hands stay put.
+    """
+    s = _fresh_session()
+    wss = seat_4_humans(s)
+
+    play = Play(spiel=1)
+    s.current_play = play
+
+    seat_o = s._seat("compo")
+    seat_n = s._seat("compn")
+    p_o, p_n = seat_o.principal, seat_n.principal
+    hand_o = play.compo
+    hand_n = play.compn
+
+    # Simulate compn dropping after accept but before the trick boundary.
+    surviving_ws = wss["compo"]
+    seat_n.websocket = None
+
+    s._pending_swap = ("compo", "compn")
+    await s._commit_pending_swap()
+
+    # No commit broadcast.
+    for pos in ("compo", "compn", "compe", "comps"):
+        assert wss[pos].last_sent_of_type("seat_swap_committed") is None
+
+    # Principals & hands untouched.
+    assert seat_o.principal is p_o
+    assert seat_n.principal is p_n
+    assert play.compo is hand_o
+    assert play.compn is hand_n
+
+    # _pending_swap consumed (one-shot).
+    assert s._pending_swap is None
+
+    # The still-connected side received seat_swap_expired.
+    expired = surviving_ws.last_sent_of_type("seat_swap_expired")
+    assert expired is not None
+    assert expired["from_position"] == "compo"
+
+
 async def test_seat_swap_ttl_fires_seat_swap_expired(fast_clock):
     """If the target never accepts, the timeout coro fires and pushes
     seat_swap_expired to the target."""
@@ -334,3 +377,66 @@ async def test_seat_swap_endpoint_happy_accept_path(client, client_other):
 
     assert room._pending_swap == ("compo", "compn")
     assert ("compo", "compn") not in room._swap_requests
+
+
+async def test_seat_swap_409_when_target_already_has_pending_request(client, client_other):
+    """A second requester aiming at a seat that already has a pending
+    request gets 409. Spec is silent; reviewer guidance picks "fail
+    fast" so two requesters can't race for one acceptor click.
+    """
+    from ausbau.room import get_room
+
+    create = await client.post("/rooms", json={},
+                               headers={"X-Requested-With": "schieber"})
+    code = create.json()["code"]
+    join = await client_other.post(f"/rooms/{code}/join", json={"seat": 1},
+                                   headers={"X-Requested-With": "schieber"})
+    assert join.status_code == 200
+
+    room = get_room(code)
+    room.state = "playing"
+    # All four seats need to be connected humans for the swap checks.
+    room.seats[0].websocket = FakeWebSocket()
+    room.seats[1].websocket = FakeWebSocket()
+    # Attach client_other's principal to seat 2 (compe) too, so it's a
+    # connected human that can also issue a request.
+    from frontend.auth.guest import Guest
+    room.seats[2].principal = Guest(guest_id='c' * 32)
+    room.seats[2].is_ai = False
+    room.seats[2].websocket = FakeWebSocket()
+
+    # Simulate compe→compn already pending (a different requester already
+    # has the same target). We bypass the endpoint to plant it cleanly.
+    await room._record_seat_swap_request("compe", "compn", "carol")
+    assert ("compe", "compn") in room._swap_requests
+
+    # Now host (compo) tries compo→compn. Different from-pos, same to-pos.
+    r = await client.post(f"/rooms/{code}/seat", json={"to": 1},
+                          headers={"X-Requested-With": "schieber"})
+    assert r.status_code == 409, r.text
+    # Original request still standing.
+    assert ("compe", "compn") in room._swap_requests
+    # No new request was recorded for compo.
+    assert ("compo", "compn") not in room._swap_requests
+
+
+async def test_seat_swap_endpoint_403_if_caller_disconnected(client):
+    """Caller's seat exists but ``websocket=None`` (mid-grace) → 403.
+    The existing ``websocket is None`` branch covers this case.
+    """
+    from ausbau.room import get_room
+
+    create = await client.post("/rooms", json={},
+                               headers={"X-Requested-With": "schieber"})
+    code = create.json()["code"]
+    room = get_room(code)
+    room.state = "playing"
+    # Caller is host @ compo: principal is set by /rooms POST, but no WS
+    # ever attached (or it dropped, mid-grace).
+    assert room.seats[0].principal is not None
+    assert room.seats[0].websocket is None
+    assert room.seats[0].is_ai is False
+
+    r = await client.post(f"/rooms/{code}/seat", json={"to": 1},
+                          headers={"X-Requested-With": "schieber"})
+    assert r.status_code == 403, r.text
