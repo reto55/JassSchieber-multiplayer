@@ -126,6 +126,8 @@ For spectators (TV mode): `your_position: null`, `your_hand: null`, `players` li
 }
 ```
 
+`winning_team` is `"sn"`, `"ow"`, or `"tie"`. Per Task 11 it is computed from the sum of declared (announced) weis points per team for THIS phase (tie → `"tie"`, no points awarded). Seats that declined or had no weis are omitted from `weis_by_position` (the field maps only declared positions to their announced weis lists).
+
 ### `play_request` / `play_pending` / `card_played`
 
 `play_request` → only the seat whose turn it is:
@@ -225,6 +227,23 @@ Same shape as today's single-WS protocol:
 {"type": "schieben"}
 {"type": "play_card", "card": "E6"}
 ```
+
+`announce_weis` — reply to a `weis_request`:
+```json
+{"type": "announce_weis", "announce": true,  "weis": ["Dreier"]}
+{"type": "announce_weis", "announce": true,  "weis": null}
+{"type": "announce_weis", "announce": false}
+```
+
+Semantics:
+- `announce=false` (or `weis=[]`) → seat declines; their entry is excluded from `weis_resolution.weis_by_position`.
+- `announce=true` with `weis=null` (or missing) → announce ALL eligible weis from this seat's `your_weis`.
+- `announce=true` with `weis=[<name>, ...]` → announce only the entries whose `name` matches; entries not in this seat's `your_weis` are dropped.
+- Empty resulting set → seat is excluded from `weis_resolution.weis_by_position`.
+
+A seat that received `your_weis: []` may reply with `{"type": "announce_weis", "announce": false}` (recommended) or skip silently — Task 11's multi-seat phase requires every seat to respond before broadcasting `weis_resolution`.
+
+Legacy single-WS path (`/ws`): used `{"type": "declare_weis", "announce": bool, "weis": [...]}`. The multi-seat path standardises on `announce_weis`. Clients on `/ws/{code}` MUST use `announce_weis`.
 
 The server attributes each message to the WS that sent it (= that seat). Validation: right seat's turn, card in seat's hand, etc. Out-of-turn or invalid messages → `error` reply on the same seat's WS only.
 

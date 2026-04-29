@@ -494,8 +494,105 @@ class GameSession:
             "by": chooser,
         })
 
-    async def _weis_phase(self, websocket, play: Play) -> None:
-        """Handle weis declaration. Asks human if they have combinations; AI always announces."""
+    async def _weis_phase(self, play: Play) -> None:
+        """Multi-seat weis declaration.
+
+        Per the schieber-protocol skill:
+
+          - Each seat receives a private ``weis_request`` carrying ONLY
+            their own eligible weis as ``your_weis`` (per-seat redaction;
+            never reveal another seat's weis here).
+          - Each seat replies with
+            ``{"type": "announce_weis", "announce": bool, "weis": ?}``.
+            ``announce=False`` (or empty ``weis`` list) → seat declines.
+            ``announce=True`` with no/None ``weis`` → announce all of
+            ``your_weis``. ``announce=True`` with a list of names →
+            announce only the matching subset (entries not present in
+            ``your_weis`` are dropped).
+          - AI seats auto-announce all their eligible weis.
+          - The team with the higher sum of declared weis points wins
+            (``winning_team`` ∈ {"sn", "ow", "tie"}). On a tie no team
+            scores.  (Task 11 simplification — full strongest-weis
+            tiebreak per Schieber rules is left for a later task.)
+          - Server broadcasts ``weis_resolution`` with
+            ``weis_by_position`` populated only for seats that declared.
+        """
+        # Per-position eligible weis (used to validate declarations and as
+        # the AI auto-announce default).
+        hand_for = {
+            "comps": play.comps,
+            "compn": play.compn,
+            "compo": play.compo,
+            "compe": play.compe,
+        }
+        eligible: dict[str, list] = {}
+        for pos in PLAYERS:
+            eligible[pos] = describe_weis(
+                wiis(hand_for[pos]),
+                wiis_gleiche(hand_for[pos]),
+            )
+
+        # Send each seat their (and only their) prompt.
+        for pos in PLAYERS:
+            await self.send_to_seat(pos, {
+                "type": "weis_request",
+                "your_weis": eligible[pos],
+            })
+
+        # Collect announcements per seat.
+        declared: dict[str, list] = {}
+        for pos in PLAYERS:
+            seat = self._seat(pos)
+            own = eligible[pos]
+            if seat.is_ai:
+                # AI auto-announces everything eligible.
+                if own:
+                    declared[pos] = own
+                continue
+
+            msg = await self._await_seat_action(pos, valid_actions={
+                "type": "weis",
+            })
+            announce = bool(msg.get("announce")) if isinstance(msg, dict) else False
+            if not announce:
+                continue
+            selected = msg.get("weis") if isinstance(msg, dict) else None
+            if isinstance(selected, list) and selected:
+                names = set(selected)
+                filtered = [w for w in own if w["name"] in names]
+                if filtered:
+                    declared[pos] = filtered
+            elif own:
+                # announce=True with no/empty selection → announce all.
+                declared[pos] = own
+
+        # Tally per team.
+        sn_pts = sum(w["points"] for p in SN_PLAYERS if p in declared
+                     for w in declared[p])
+        ow_pts = sum(w["points"] for p in OW_PLAYERS if p in declared
+                     for w in declared[p])
+
+        if sn_pts > ow_pts:
+            winning_team = "sn"
+            self.point_sn += sn_pts
+        elif ow_pts > sn_pts:
+            winning_team = "ow"
+            self.point_ow += ow_pts
+        else:
+            # Tie (covers the both-zero case too) → no points awarded.
+            winning_team = "tie"
+
+        await self.broadcast({
+            "type": "weis_resolution",
+            "winning_team": winning_team,
+            "weis_by_position": declared,
+        })
+
+    async def _weis_phase_legacy(self, websocket, play: Play) -> None:
+        """Handle weis declaration. Asks human if they have combinations; AI always announces.
+
+        Legacy single-WS path. Multi-seat callers use ``_weis_phase``.
+        """
         human_weis = describe_weis(wiis(play.comps), wiis_gleiche(play.comps))
         weis_announce = {}
 
@@ -639,7 +736,7 @@ class GameSession:
         play = Play(spiel_num)
         await websocket.send_json(self._initial_state(play))
         await self._trump_phase_legacy(websocket, play)
-        await self._weis_phase(websocket, play)
+        await self._weis_phase_legacy(websocket, play)
 
         for trick_num in range(9):
             winner, trick_pts = await self._play_trick(websocket, play)

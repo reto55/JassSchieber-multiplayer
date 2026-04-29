@@ -242,7 +242,7 @@ def test_weis_phase_sends_result():
     session = GameSession()
     play = Play(1)
     ws = AsyncMock()
-    asyncio.run(session._weis_phase(ws, play))
+    asyncio.run(session._weis_phase_legacy(ws, play))
 
     last = ws.send_json.call_args_list[-1][0][0]
     assert last['type'] == 'weis_result'
@@ -264,7 +264,7 @@ def test_weis_phase_human_announces_adds_points():
     })
 
     with patch('ausbau.game_session.describe_weis', return_value=fake_weis):
-        asyncio.run(session._weis_phase(ws, play))
+        asyncio.run(session._weis_phase_legacy(ws, play))
 
     # Human (comps) is SN team — points should have increased
     assert session.point_sn >= 20
@@ -322,7 +322,7 @@ def test_run_spiel_trick_end_includes_points_key():
         return ('comps', next(fake_trick_values))
 
     with patch.object(GameSession, '_trump_phase_legacy', _noop_trump), \
-         patch.object(GameSession, '_weis_phase', _noop_weis), \
+         patch.object(GameSession, '_weis_phase_legacy', _noop_weis), \
          patch.object(GameSession, '_play_trick', _fake_play_trick), \
          patch('ausbau.game_session.asyncio.sleep', new=AsyncMock()):
         asyncio.run(session._run_spiel(ws, 4))
@@ -380,7 +380,7 @@ def _drive_run_spiel_and_collect(session_scores):
         return ('comps', 0)
 
     with patch.object(GameSession, '_trump_phase_legacy', _noop_trump), \
-         patch.object(GameSession, '_weis_phase', _noop_weis), \
+         patch.object(GameSession, '_weis_phase_legacy', _noop_weis), \
          patch.object(GameSession, '_play_trick', _fake_play_trick), \
          patch('ausbau.game_session.asyncio.sleep', new=AsyncMock()):
         asyncio.run(session._run_spiel(ws, 4))
@@ -460,7 +460,7 @@ def test_weis_phase_subset_announces_only_selected():
         return human_weis if call_counter['n'] == 1 else []
 
     with patch('ausbau.game_session.describe_weis', side_effect=_fake_describe):
-        asyncio.run(session._weis_phase(ws, play))
+        asyncio.run(session._weis_phase_legacy(ws, play))
 
     last = ws.send_json.call_args_list[-1][0][0]
     assert last['type'] == 'weis_result'
@@ -499,7 +499,7 @@ def test_weis_phase_empty_weis_with_announce_true_keeps_all():
         return human_weis if call_counter['n'] == 1 else []
 
     with patch('ausbau.game_session.describe_weis', side_effect=_fake_describe):
-        asyncio.run(session._weis_phase(ws, play))
+        asyncio.run(session._weis_phase_legacy(ws, play))
 
     last = ws.send_json.call_args_list[-1][0][0]
     sued = [a for a in last['announcements'] if a['player'] == 'Süd']
@@ -535,7 +535,7 @@ def test_weis_phase_missing_weis_with_announce_true_keeps_all():
         return human_weis if call_counter['n'] == 1 else []
 
     with patch('ausbau.game_session.describe_weis', side_effect=_fake_describe):
-        asyncio.run(session._weis_phase(ws, play))
+        asyncio.run(session._weis_phase_legacy(ws, play))
 
     assert session.point_sn == 20
 
@@ -565,7 +565,7 @@ def test_weis_phase_announce_false_announces_nothing_even_with_weis():
         return human_weis if call_counter['n'] == 1 else []
 
     with patch('ausbau.game_session.describe_weis', side_effect=_fake_describe):
-        asyncio.run(session._weis_phase(ws, play))
+        asyncio.run(session._weis_phase_legacy(ws, play))
 
     last = ws.send_json.call_args_list[-1][0][0]
     sued = [a for a in last['announcements'] if a['player'] == 'Süd']
@@ -599,7 +599,7 @@ def test_weis_phase_subset_with_nonexistent_name_drops_it():
         return human_weis if call_counter['n'] == 1 else []
 
     with patch('ausbau.game_session.describe_weis', side_effect=_fake_describe):
-        asyncio.run(session._weis_phase(ws, play))
+        asyncio.run(session._weis_phase_legacy(ws, play))
 
     last = ws.send_json.call_args_list[-1][0][0]
     sued = [a for a in last['announcements'] if a['player'] == 'Süd']
