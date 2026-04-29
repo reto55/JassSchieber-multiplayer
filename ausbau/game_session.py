@@ -437,6 +437,10 @@ class GameSession:
         )
         seat.is_ai = True
         seat.reconnect_deadline = None
+        # Sub-project C: reset AI difficulty on takeover (spec §5 step 5).
+        seat.ai_difficulty = "medium"
+        from ausbau.ai_strategies import make_strategy
+        seat._strategy = make_strategy("medium", position)
         self._reconnect_tasks.pop(position, None)
         await self.broadcast({"type": "seat_ai_takeover", "position": position})
         if was_host:

@@ -310,6 +310,10 @@ async def join_endpoint(
     seat = room.seats[target_idx]
     seat.principal = principal
     seat.is_ai = False
+    # Sub-project C: clear AI strategy when a human takes the seat
+    # (ai_difficulty is preserved so the seat retains its level if the
+    # human later leaves in lobby).
+    seat._strategy = None
     # Broadcast lobby state change so other occupants (seats + spectators)
     # auto-refresh without manual reload. The new joiner has no WS yet so
     # `broadcast` only delivers to the OTHER seats and spectators here.
@@ -345,6 +349,9 @@ async def leave_endpoint(
             seat.principal = None
             seat.is_ai = True
             seat.websocket = None
+            # Sub-project C: rebuild AI strategy from preserved difficulty.
+            from ausbau.ai_strategies import make_strategy
+            seat._strategy = make_strategy(seat.ai_difficulty, seat.position)
             # Lobby self-leave: announce so other occupants auto-refresh.
             # `_disconnect_seat`'s lobby branch ALSO broadcasts a
             # `seat_changed`, but that path is only reached on a WS drop
@@ -361,6 +368,9 @@ async def leave_endpoint(
             seat.is_ai = True
             seat.websocket = None
             seat.principal = None
+            # Sub-project C: rebuild AI strategy from preserved difficulty.
+            from ausbau.ai_strategies import make_strategy
+            seat._strategy = make_strategy(seat.ai_difficulty, seat.position)
             seat.state_event.set()
             await room.broadcast({
                 "type": "seat_changed",
