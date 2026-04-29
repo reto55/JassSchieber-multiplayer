@@ -1135,6 +1135,10 @@ class GameSession:
                 "by_position": player,
                 "card": card_to_code(card),
             })
+            # Sub-project C: feed AI memory.
+            for s in self.seats:
+                if s.is_ai and s._strategy is not None:
+                    s._strategy.on_card_played(player, card_to_code(card))
             player = play.folger[player]
 
         winner = determine_trick_winner(trick, play.first, play.operator, play.folger)
@@ -1321,6 +1325,11 @@ class GameSession:
         play = Play(spiel_num)
         self.current_play = play
         self._reset_spiel_trick_winners()
+
+        # Sub-project C: notify each AI seat's strategy.
+        for s in self.seats:
+            if s.is_ai and s._strategy is not None:
+                s._strategy.on_spiel_start(play)
 
         # 1. game_start — per-seat redaction.
         def _factory(seat):
