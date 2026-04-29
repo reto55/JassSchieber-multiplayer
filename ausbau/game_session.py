@@ -96,8 +96,15 @@ def determine_trick_winner(trick: dict, first: str, operator: str, folger: dict)
     return winner
 
 
-def trick_points(trick: dict, operator: str) -> int:
-    """Sum point values of all cards in the trick for the given mode."""
+def trick_points(trick: dict, operator: str, *, trumpf_bock: bool = False) -> int:
+    """Sum point values of all cards in the trick for the given mode.
+
+    Per spec §7.1, the ``trumpf_bock`` variant multiplies the trick total
+    by 5 in trump-mode rounds (``operator in SUITS``). It does NOT apply
+    to ``Oben`` / ``Unten`` rounds, nor to weis or stöck. Weis points are
+    awarded by ``_weis_phase`` and stöck by ``_apply_stoeck`` — neither
+    routes through this function.
+    """
     total = 0
     for card in trick.values():
         if operator in SUITS:
@@ -106,6 +113,8 @@ def trick_points(trick: dict, operator: str) -> int:
             total += card.woben
         else:
             total += card.wunten
+    if trumpf_bock and operator in SUITS:
+        total *= 5
     return total
 
 
@@ -188,6 +197,12 @@ class GameSession:
         # attribute surface so reconnect tests can populate manually.
         self._current_seat_turn = None         # Position whose turn it is, or None
         self._current_trick_so_far = []        # list of {"position","card"} for in-progress trick
+
+        # Per-spiel trick-winner log — `_play_trick` appends each trick's
+        # winner position. `_apply_match_bonus` reads it; Task 18's
+        # `_run_spiel` resets it via `_reset_spiel_trick_winners` between
+        # spiele.
+        self._spiel_trick_winners: list[str] = []
 
     def _seat(self, position: str):
         for s in self.seats:
@@ -1011,13 +1026,19 @@ class GameSession:
             player = play.folger[player]
 
         winner = determine_trick_winner(trick, play.first, play.operator, play.folger)
-        pts = trick_points(trick, play.operator)
+        pts = trick_points(
+            trick, play.operator, trumpf_bock=self.variant.trumpf_bock,
+        )
         if winner in SN_PLAYERS:
             self.point_sn += pts
             winner_team = "sn"
         else:
             self.point_ow += pts
             winner_team = "ow"
+
+        # Per-spiel match tracking — Task 18's `_run_spiel` reads this to
+        # decide the +100 match bonus via `_apply_match_bonus`.
+        self._spiel_trick_winners.append(winner)
 
         await self.broadcast({
             "type": "trick_end",
@@ -1131,6 +1152,64 @@ class GameSession:
         else:
             self.point_ow += pts
         return winner, pts
+
+    def _reset_spiel_trick_winners(self) -> None:
+        """Clear the per-spiel trick-winner log.
+
+        Called by Task 18's ``_run_spiel`` at the start of each spiel so
+        ``_apply_match_bonus`` only ever sees a single spiel's worth of
+        winners.
+        """
+        self._spiel_trick_winners = []
+
+    def _apply_match_bonus(self) -> tuple[int, int]:
+        """Compute the per-team match bonus for the just-finished spiel.
+
+        Per spec §7.2, when ``variant.match_bonus`` is True and one team
+        won all 9 tricks, +100 is awarded to that team. Anything else
+        (mixed winners, ``match_bonus=False``, fewer than 9 tricks
+        recorded) yields ``(0, 0)``.
+
+        Returns ``(sn_bonus, ow_bonus)``. Task 18's ``_run_spiel`` adds
+        the result to ``self.point_sn`` / ``self.point_ow``.
+        """
+        if not self.variant.match_bonus:
+            return (0, 0)
+        if len(self._spiel_trick_winners) != 9:
+            return (0, 0)
+        sn_count = sum(1 for w in self._spiel_trick_winners if w in SN_PLAYERS)
+        if sn_count == 9:
+            return (100, 0)
+        if sn_count == 0:
+            return (0, 100)
+        return (0, 0)
+
+    def _apply_stoeck(self, play: Play) -> tuple[int, int]:
+        """Compute the per-team Stöck bonus for the current spiel.
+
+        Per spec §7.3, when ``variant.stoeck`` is True and the current
+        round is a trump-mode round, every seat holding King + Ober of
+        the trump suit awards +20 to its team. Returns
+        ``(sn_bonus, ow_bonus)``.
+
+        Stöck is only meaningful in trump rounds — ``Oben`` / ``Unten``
+        always yield ``(0, 0)``. Disabling the variant short-circuits to
+        ``(0, 0)`` regardless of holdings.
+        """
+        if not self.variant.stoeck:
+            return (0, 0)
+        if play.operator not in SUITS:
+            return (0, 0)
+        sn = 0
+        ow = 0
+        for pos in PLAYERS:
+            hand = getattr(play, pos)
+            if detect_stock(hand, play.operator):
+                if pos in SN_PLAYERS:
+                    sn += 20
+                else:
+                    ow += 20
+        return (sn, ow)
 
     async def _run_spiel(self, websocket, spiel_num: int) -> None:
         """Deal, trump, weis, then 9 tricks for one Spiel."""
