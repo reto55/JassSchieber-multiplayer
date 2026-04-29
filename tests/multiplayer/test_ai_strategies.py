@@ -65,3 +65,41 @@ def test_easy_pick_card_returns_valid_card():
     # Card must be one of the codes in seat's hand
     from ausbau.game_session import hand_to_codes
     assert msg["card"] in hand_to_codes(play.comps)
+
+
+def test_medium_pick_trump_uses_farbe_lang():
+    from utils.card_utils import farbe_lang
+    s = MediumStrategy("comps")
+    play = Play(spiel=1)
+    msg = s.pick_trump(play, schieben_allowed=True)
+    assert msg["type"] == "choose_trump"
+    assert msg["operator"] == farbe_lang(play.comps)
+
+
+def test_medium_pick_trump_never_schiebens():
+    s = MediumStrategy("comps")
+    play = Play(spiel=1)
+    for _ in range(10):
+        msg = s.pick_trump(play, schieben_allowed=True)
+        assert msg["type"] == "choose_trump"
+
+
+def test_medium_pick_card_lead_picks_highest_point():
+    from ausbau.game_session import ai_select_card, card_to_code
+    s = MediumStrategy("compe")
+    play = Play(spiel=1)
+    play.operator = "Eicheln"
+    msg = s.pick_card(play, lead_suit=None, trick_so_far=[])
+    expected = card_to_code(ai_select_card(play.compe, None, "Eicheln"))
+    assert msg == {"type": "play_card", "card": expected}
+
+
+def test_medium_pick_card_follow_picks_lowest_point():
+    from ausbau.game_session import ai_select_card, card_to_code
+    s = MediumStrategy("compn")
+    play = Play(spiel=1)
+    play.operator = "Eicheln"
+    # Lead has been played: pretend lead suit is "Rosen"
+    msg = s.pick_card(play, lead_suit="Rosen", trick_so_far=[{"position": "compe", "card": "RA"}])
+    expected = card_to_code(ai_select_card(play.compn, "Rosen", "Eicheln"))
+    assert msg == {"type": "play_card", "card": expected}
