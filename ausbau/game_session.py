@@ -355,6 +355,10 @@ class GameSession:
                 "type": "trump",
                 "options": list(TRUMP_OPTIONS),
                 "schieben_allowed": schieben_allowed,
+                # Hand is needed by `_compute_ai_action` for AI seats; humans
+                # ignore it. The phase still owns validation of the reply.
+                # `getattr(..., None)` keeps `FakePlay` test doubles working.
+                "hand": getattr(play, target_position, None),
             })
 
             mtype = msg.get("type") if isinstance(msg, dict) else None
@@ -410,24 +414,66 @@ class GameSession:
         return partners[position]
 
     async def _await_seat_action(self, position: str, valid_actions: dict) -> dict:
-        """Stub — full implementation in Task 13. Reads from seat's incoming queue."""
+        """Wait for an action from a seat. Routes to AI or human queue.
+
+        - AI seats compute synchronously via ``_compute_ai_action``.
+        - Human + connected seats dequeue ONE message from
+          ``seat.incoming`` and return it. The phase loop owns
+          validation and may re-prompt.
+        - Human + disconnected seats (``websocket is None``) block on
+          ``seat.state_event`` until a reclaim or AI-takeover (Task 14)
+          flips the state, then re-evaluate.
+
+        The queue read does NOT raise WS errors — the WS reader task
+        feeds the queue and dies separately on disconnect; the
+        ``state_event`` wait covers the disconnect-mid-await case.
+        """
         seat = self._seat(position)
-        if seat.is_ai:
-            return self._compute_ai_action(seat, valid_actions)
-        return await seat.incoming.get()
+        while True:
+            if seat.is_ai:
+                return self._compute_ai_action(seat, valid_actions)
+            if seat.websocket is None:
+                seat.state_event.clear()
+                await seat.state_event.wait()
+                continue
+            # Human + connected: pull one message from the per-seat queue.
+            msg = await seat.incoming.get()
+            return msg
 
     def _compute_ai_action(self, seat, valid_actions: dict) -> dict:
-        """Crude AI stub — Task 13 swaps in real strategy.
+        """Compute a synchronous AI action from a phase prompt.
 
-        ``trump`` → always picks Eicheln. ``play_card`` → first valid
-        card from ``valid_cards`` (no strategic ranking yet)."""
+        ``trump`` → use ``utils.card_utils.farbe_lang`` over the seat's
+        hand (passed in via ``valid_actions["hand"]``) to pick the
+        longest suit; AI never schiebens at this stage.
+
+        ``play_card`` → use ``ai_select_card(hand, lead_suit, operator)``
+        from this module. ``hand`` comes via ``valid_actions["hand"]``.
+
+        Anything else (or missing hand) returns a safe ``noop`` /
+        first-valid fallback. Phases that drive the AI MUST pass
+        ``hand`` in ``valid_actions``.
+        """
         action_type = valid_actions.get("type")
         if action_type == "trump":
-            return {"type": "choose_trump", "operator": "Eicheln"}
+            hand = valid_actions.get("hand")
+            if hand is None:
+                # Defensive fallback — phase should always provide hand.
+                return {"type": "choose_trump", "operator": "Eicheln"}
+            from utils.card_utils import farbe_lang
+            operator = farbe_lang(hand)
+            return {"type": "choose_trump", "operator": operator}
         if action_type == "play_card":
-            valid = valid_actions.get("valid_cards") or []
-            if valid:
-                return {"type": "play_card", "card": valid[0]}
+            hand = valid_actions.get("hand")
+            if hand is None:
+                valid = valid_actions.get("valid_cards") or []
+                if valid:
+                    return {"type": "play_card", "card": valid[0]}
+                return {"type": "noop"}
+            lead_suit = valid_actions.get("lead_suit")
+            operator = valid_actions.get("operator", "")
+            card = ai_select_card(hand, lead_suit, operator)
+            return {"type": "play_card", "card": card_to_code(card)}
         return {"type": "noop"}
 
     async def _trump_phase_legacy(self, websocket, play: Play) -> None:
@@ -749,6 +795,9 @@ class GameSession:
                     "lead_suit": lead_suit,
                     "operator": play.operator,
                     "valid_cards": valid,
+                    # AI seats need the live hand to pick a card via
+                    # `ai_select_card`. Humans ignore it.
+                    "hand": hand,
                 })
 
                 if not isinstance(msg, dict):
