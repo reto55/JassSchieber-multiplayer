@@ -409,6 +409,10 @@ async def leave_endpoint(
     seat.principal = None
     seat.is_ai = True
     seat.websocket = None
+    # Sub-project C: kicked seat reverts to AI; rebuild strategy from
+    # preserved ai_difficulty (kick is lobby-only, same semantics as /leave).
+    from ausbau.ai_strategies import make_strategy
+    seat._strategy = make_strategy(seat.ai_difficulty, seat.position)
 
     if is_self_kick:
         # Behave like self-leave for host: transfer host to next-oldest.
