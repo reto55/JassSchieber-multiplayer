@@ -192,6 +192,7 @@ def _seat_to_dict(seat, room) -> dict:
         "principal_id": (
             principal_id(seat.principal) if seat.principal is not None else None
         ),
+        "ai_difficulty": seat.ai_difficulty if seat.is_ai else None,
     }
 
 
@@ -602,6 +603,58 @@ async def seat_swap_endpoint(
     except KeyError as exc:
         raise HTTPException(400, "no pending swap request") from exc
     return {"room_state": room.state}
+
+
+# ---------------------------------------------------------------------------
+# AI difficulty endpoint (Sub-project C, Task 11)
+# ---------------------------------------------------------------------------
+
+
+@app.post("/rooms/{code}/ai_difficulty", status_code=200)
+async def ai_difficulty_endpoint(
+    code: str,
+    request: Request,
+    response: Response,
+    payload: Optional[dict] = Body(default={}),
+):
+    """Set an AI seat's difficulty. Host-only, lobby-only.
+
+    Body: ``{"position": "compe", "level": "hard"}``
+    """
+    from ausbau.room import get_room, principal_id, POSITIONS
+    from ausbau.ai_strategies import make_strategy
+
+    room = get_room(code)
+    if room is None:
+        raise HTTPException(404, "room not found")
+
+    principal = await _get_principal(request, response)
+    if principal_id(principal) != room.host_principal_id:
+        raise HTTPException(403, "not host")
+    if room.state != "lobby":
+        raise HTTPException(409, f"lobby only; state={room.state}")
+
+    body = payload or {}
+    position = body.get("position")
+    level = body.get("level")
+    if position not in POSITIONS:
+        raise HTTPException(400, "invalid position")
+    if level not in ("easy", "medium", "hard"):
+        raise HTTPException(400, f"unknown difficulty: {level!r}")
+
+    seat = next(s for s in room.seats if s.position == position)
+    if not seat.is_ai:
+        raise HTTPException(400, "seat is human, no AI difficulty")
+
+    seat.ai_difficulty = level
+    seat._strategy = make_strategy(level, seat.position)
+
+    await room.broadcast({
+        "type": "seat_changed",
+        "seat": _seat_to_dict(seat, room),
+        "reason": "ai_difficulty",
+    })
+    return _room_state_dict(room)
 
 
 # ---------------------------------------------------------------------------

@@ -252,6 +252,7 @@ class GameSession:
             "principal_id": (
                 principal_id(seat.principal) if seat.principal is not None else None
             ),
+            "ai_difficulty": seat.ai_difficulty if seat.is_ai else None,
         }
 
     def _seated_human_count(self) -> int:
