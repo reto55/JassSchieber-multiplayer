@@ -2,12 +2,11 @@ import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import asyncio
-import logging
 import time
 from typing import Optional
 from Cards_refactored import (
     Play, SUITS, PLAY_MODES, Card,
-    determine_trumpf, determine_trumpf_after_schieben, wiis, wiis_gleiche,
+    wiis, wiis_gleiche,
 )
 from utils.game_utils import check_game_end
 from ausbau.room import (
@@ -16,8 +15,6 @@ from ausbau.room import (
     SEAT_SWAP_REQUEST_TTL_SECONDS,
     principal_id,
 )
-
-logger = logging.getLogger(__name__)
 
 SUIT_PREFIX = {'Eicheln': 'E', 'Rosen': 'R', 'Schellen': 'SE', 'Schilten': 'SI'}
 RANK_SUFFIX = {9: 'A', 8: 'K', 7: 'O', 6: 'U', 5: 'B', 4: '9', 3: '8', 2: '7', 1: '6'}
@@ -166,14 +163,12 @@ class GameSession:
         host_principal_id: str = "",
         variant=None,                     # type: Variant | None
         end_game: int = 1000,
-        principal=None,                   # legacy: from sub-project B's WS principal injection
     ):
         from ausbau.room import POSITIONS, Seat, Variant
         self.code = code
         self.variant = variant if variant is not None else Variant()
         self.end_game = end_game
         self.host_principal_id = host_principal_id
-        self.principal = principal        # legacy compatibility for old /ws code path
 
         # Lobby state
         self.seats = [Seat(position=POSITIONS[i]) for i in range(4)]
@@ -880,78 +875,6 @@ class GameSession:
             return {"type": "play_card", "card": card_to_code(card)}
         return {"type": "noop"}
 
-    async def _trump_phase_legacy(self, websocket, play: Play) -> None:
-        """Handle trump selection. Asks human if they are the lead or if AI schiebs to them.
-
-        Per the schieber-protocol skill invariant §5 ("No silent failures…
-        server responds with `error` and re-sends the most recent prompt"),
-        the human may only reply with `choose_trump` (always) or `schieben`
-        (only when the most recent `trump_request` offered `can_schieben=True`).
-        Any other message `type` is rejected with an `error` payload followed
-        by a re-send of the same `trump_request`. The loop continues until a
-        valid reply arrives. Messages that happen to carry a `suit` key but
-        the wrong `type` are NOT accepted — tightens defect D9.
-        """
-        if play.first == 'comps':
-            # Human leads — choose_trump or schieben both allowed.
-            prompt = {"type": "trump_request", "can_schieben": True}
-            await websocket.send_json(prompt)
-            while True:
-                msg = await websocket.receive_json()
-                mtype = msg.get('type')
-                if mtype == 'schieben':
-                    play.operator = determine_trumpf_after_schieben(play.compn)
-                    play.starter = 'compn'
-                    chooser = 'Nord'
-                    break
-                if mtype == 'choose_trump' and 'suit' in msg:
-                    play.operator = msg['suit']
-                    play.starter = 'comps'
-                    chooser = 'Du'
-                    break
-                await websocket.send_json({
-                    "type": "error",
-                    "message": (
-                        f"Erwartet: 'choose_trump' oder 'schieben', erhalten: {mtype!r}."
-                    ),
-                })
-                await websocket.send_json(prompt)
-        elif play.operator == 'Schieben':
-            # AI lead wants to pass — check if partner is human
-            partner = play.partner[play.first]
-            if partner == 'comps':
-                # Post-schieben: human must choose_trump; schieben is NOT allowed.
-                prompt = {"type": "trump_request", "can_schieben": False}
-                await websocket.send_json(prompt)
-                while True:
-                    msg = await websocket.receive_json()
-                    mtype = msg.get('type')
-                    if mtype == 'choose_trump' and 'suit' in msg:
-                        play.operator = msg['suit']
-                        play.starter = 'comps'
-                        chooser = 'Du'
-                        break
-                    await websocket.send_json({
-                        "type": "error",
-                        "message": (
-                            f"Erwartet: 'choose_trump', erhalten: {mtype!r}."
-                        ),
-                    })
-                    await websocket.send_json(prompt)
-            else:
-                play.operator = determine_trumpf_after_schieben(play.__dict__[partner])
-                play.starter = partner
-                chooser = POSITION_NAMES[partner]
-        else:
-            # AI already chose — just inform client
-            chooser = POSITION_NAMES[play.first]
-
-        await websocket.send_json({
-            "type": "trump_chosen",
-            "suit": play.operator,
-            "by": chooser,
-        })
-
     async def _weis_phase(self, play: Play) -> None:
         """Multi-seat weis declaration.
 
@@ -1086,60 +1009,6 @@ class GameSession:
             "type": "weis_resolution",
             "winning_team": winning_team,
             "weis_by_position": declared,
-        })
-
-    async def _weis_phase_legacy(self, websocket, play: Play) -> None:
-        """Handle weis declaration. Asks human if they have combinations; AI always announces.
-
-        Legacy single-WS path. Multi-seat callers use ``_weis_phase``.
-        """
-        human_weis = describe_weis(wiis(play.comps), wiis_gleiche(play.comps))
-        weis_announce = {}
-
-        if human_weis:
-            await websocket.send_json({"type": "weis_request", "your_weis": human_weis})
-            msg = await websocket.receive_json()
-            if msg.get('announce'):
-                # Subset selection per skill: if `weis` is a non-empty list,
-                # announce only the entries whose `name` is in that list.
-                # Empty / missing `weis` falls back to legacy all-announce.
-                selected = msg.get('weis')
-                if isinstance(selected, list) and selected:
-                    selected_set = set(selected)
-                    filtered = [w for w in human_weis if w['name'] in selected_set]
-                    if filtered:
-                        weis_announce['comps'] = filtered
-                else:
-                    weis_announce['comps'] = human_weis
-
-        # AI players always announce if they have weis
-        for player in ['compo', 'compn', 'compe']:
-            pw = describe_weis(
-                wiis(play.__dict__[player]),
-                wiis_gleiche(play.__dict__[player]),
-            )
-            if pw:
-                weis_announce[player] = pw
-
-        sn_pts = sum(w['points'] for p in SN_PLAYERS if p in weis_announce
-                     for w in weis_announce[p])
-        ow_pts = sum(w['points'] for p in OW_PLAYERS if p in weis_announce
-                     for w in weis_announce[p])
-        self.point_sn += sn_pts
-        self.point_ow += ow_pts
-
-        announcements = [
-            {
-                "player": POSITION_NAMES[p],
-                "weis": weis_announce[p],
-                "points": sum(w['points'] for w in weis_announce[p]),
-            }
-            for p in PLAYERS if p in weis_announce
-        ]
-        await websocket.send_json({
-            "type": "weis_result",
-            "announcements": announcements,
-            "scores": {"sn": self.point_sn, "ow": self.point_ow},
         })
 
     async def _play_trick(self, play: Play) -> tuple:
@@ -1314,95 +1183,6 @@ class GameSession:
         # interleaves with an in-flight trick.
         await self._commit_pending_swap()
 
-        return winner, pts
-
-    async def _play_trick_legacy(self, websocket, play: Play) -> tuple:
-        """Legacy single-WS trick loop.
-
-        Returns a ``(winner_key, trick_points)`` tuple:
-          * ``winner_key`` — internal player key of the trick winner.
-          * ``trick_points`` — integer point value of *this* trick only
-            (needed by ``_run_spiel`` to populate the ``trick_end.points``
-            field mandated by the schieber-protocol skill).
-        """
-        trick = {}
-        lead_suit = None
-        player = play.first
-
-        for i in range(4):
-            card = None
-            if player == 'comps':
-                valid = get_valid_cards(play.comps, lead_suit, play.operator)
-                prompt = {"type": "your_turn", "valid_cards": valid}
-                await websocket.send_json(prompt)
-                while True:
-                    msg = await websocket.receive_json()
-                    # Tolerate any shape: mirror the hardening in
-                    # `_trump_phase` / `_weis_phase`. Per the schieber-protocol
-                    # skill invariant §5 ("No silent failures…server responds
-                    # with `error` and re-sends the most recent prompt"),
-                    # malformed messages must be rejected with an `error`
-                    # payload followed by a fresh `your_turn`. Only a valid
-                    # `play_card` with a `card` string pointing to a card in
-                    # the valid list breaks the loop.
-                    if not isinstance(msg, dict):
-                        await websocket.send_json({
-                            "type": "error",
-                            "message": "Ungültige Nachricht. Erwartet: 'play_card'.",
-                        })
-                        await websocket.send_json(prompt)
-                        continue
-                    mtype = msg.get('type')
-                    if mtype != 'play_card':
-                        await websocket.send_json({
-                            "type": "error",
-                            "message": (
-                                f"Erwartet: 'play_card', erhalten: {mtype!r}."
-                            ),
-                        })
-                        await websocket.send_json(prompt)
-                        continue
-                    code = msg.get('card')
-                    if not isinstance(code, str):
-                        await websocket.send_json({
-                            "type": "error",
-                            "message": "Ungültige Karte: 'card' fehlt oder ist kein String.",
-                        })
-                        await websocket.send_json(prompt)
-                        continue
-                    found, suit = find_card_in_hand(code, play.comps)
-                    if found is not None and code in valid:
-                        play.comps[suit].remove(found)
-                        card = found
-                        break
-                    await websocket.send_json({
-                        "type": "error",
-                        "message": f"Ungültige Karte: {code}",
-                    })
-                    await websocket.send_json(prompt)
-            else:
-                card = ai_select_card(play.__dict__[player], lead_suit, play.operator)
-                play.__dict__[player][card.suit].remove(card)
-                await asyncio.sleep(0.8)
-
-            if i == 0:
-                lead_suit = card.suit
-            trick[player] = card
-
-            await websocket.send_json({
-                "type": "card_played",
-                "player": POSITION_NAMES[player],
-                "player_key": player,
-                "card": card_to_code(card),
-            })
-            player = play.folger[player]
-
-        winner = determine_trick_winner(trick, play.first, play.operator, play.folger)
-        pts = trick_points(trick, play.operator)
-        if winner in SN_PLAYERS:
-            self.point_sn += pts
-        else:
-            self.point_ow += pts
         return winner, pts
 
     def _reset_spiel_trick_winners(self) -> None:
@@ -1642,79 +1422,3 @@ class GameSession:
                 return
             await asyncio.sleep(2)  # pause between Spiele
 
-    async def _run_spiel_legacy(self, websocket, spiel_num: int) -> None:
-        """Legacy single-WS spiel loop (pre-multiplayer). Kept until the
-        old ``/ws`` path is fully deleted; multi-seat callers use
-        ``_run_spiel``.
-        """
-        play = Play(spiel_num)
-        await websocket.send_json(self._initial_state(play))
-        await self._trump_phase_legacy(websocket, play)
-        await self._weis_phase_legacy(websocket, play)
-
-        for trick_num in range(9):
-            winner, trick_pts = await self._play_trick_legacy(websocket, play)
-            is_last = trick_num == 8
-            if is_last:
-                if winner in SN_PLAYERS:
-                    self.point_sn += 5   # last trick bonus
-                else:
-                    self.point_ow += 5
-            play.first = winner  # trick winner leads next
-            await websocket.send_json({
-                "type": "trick_end",
-                "winner": POSITION_NAMES[winner],
-                "winner_key": winner,
-                "points": trick_pts,          # per-trick value (skill contract)
-                "points_sn": self.point_sn,   # optional running team totals
-                "points_ow": self.point_ow,
-            })
-
-        # round_end winner_team uses sn/ow/tie tokens (skill contract), not
-        # the long strings returned by utils.game_utils.get_winner. It reflects
-        # the team leading after THIS round's totals, not the game winner.
-        if self.point_sn > self.point_ow:
-            round_winner = "sn"
-        elif self.point_ow > self.point_sn:
-            round_winner = "ow"
-        else:
-            round_winner = "tie"
-        await websocket.send_json({
-            "type": "round_end",
-            "score_sn": self.point_sn,
-            "score_ow": self.point_ow,
-            "winner_team": round_winner,
-            "target": self.end_game,
-        })
-
-    async def run(self, websocket) -> None:
-        """Legacy single-WS main loop. Cycles 4 Spiele until end_game.
-
-        Multi-seat callers spawn ``start_game`` as a background task via
-        ``POST /rooms/{code}/start`` (Task 18). This path is retained
-        for the legacy ``/ws`` endpoint and its tests.
-        """
-        name = (
-            getattr(self.principal, "display_name", None)
-            or getattr(self.principal, "username", None)
-            or "anonymous"
-        )
-        logger.info("game start by %s", name)
-        spiel_num = 0
-        while True:
-            spiel_num = (spiel_num % 4) + 1
-            await self._run_spiel_legacy(websocket, spiel_num)
-            if check_game_end(self.point_sn, self.point_ow, self.end_game):
-                if self.point_sn > self.point_ow:
-                    game_winner = "sn"
-                elif self.point_ow > self.point_sn:
-                    game_winner = "ow"
-                else:
-                    game_winner = "tie"
-                await websocket.send_json({
-                    "type": "game_end",
-                    "winner_team": game_winner,
-                    "final_scores": {"sn": self.point_sn, "ow": self.point_ow},
-                })
-                return
-            await asyncio.sleep(2)  # pause between Spiele
