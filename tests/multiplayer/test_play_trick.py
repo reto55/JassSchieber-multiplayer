@@ -314,3 +314,55 @@ async def test_play_trick_request_only_to_active_seat():
     # Spectator also sees all card_played + trick_end broadcasts.
     assert len(spec_ws.all_sent_of_type("card_played")) == 4
     assert len(spec_ws.all_sent_of_type("trick_end")) == 1
+
+
+async def test_play_trick_updates_current_seat_turn_per_iteration():
+    """Mid-trick state tracking: `_current_seat_turn` and
+    `_current_trick_so_far` must be updated at the top of EACH iteration
+    of the 4-play loop, not just once before the call.
+
+    Without this, a reconnect mid-trick would see a stale
+    ``current_seat_turn`` and the wrong ``trick_so_far`` snapshot via
+    ``room_resume`` — so the reclaiming client thinks it's still the
+    lead's turn / nothing has been played yet.
+
+    We hook into ``send_to_seat`` to snapshot the live attributes at the
+    moment each ``play_request`` is dispatched.
+    """
+    s = _fresh_session()
+    wss = seat_4_humans(s)
+
+    play = Play(spiel=1)
+    play.operator = "Eicheln"
+    play.first = "compo"
+
+    seat_order = [play.first]
+    nxt = play.folger[play.first]
+    while nxt != play.first:
+        seat_order.append(nxt)
+        nxt = play.folger[nxt]
+
+    snapshots: list[dict] = []
+    original_send = s.send_to_seat
+
+    async def spy_send(position, msg):
+        if isinstance(msg, dict) and msg.get("type") == "play_request":
+            snapshots.append({
+                "position": position,
+                "current_seat_turn": s._current_seat_turn,
+                "trick_so_far_len": len(s._current_trick_so_far),
+            })
+        await original_send(position, msg)
+
+    s.send_to_seat = spy_send
+
+    _queue_seat_plays_first_valid(s, play, seat_order)
+    await s._play_trick(play)
+
+    # One snapshot per seat in turn order, each showing the active seat
+    # as `_current_seat_turn` and an increasing `trick_so_far` length.
+    assert len(snapshots) == 4, snapshots
+    for i, (snap, expected_pos) in enumerate(zip(snapshots, seat_order)):
+        assert snap["position"] == expected_pos, (i, snap)
+        assert snap["current_seat_turn"] == expected_pos, (i, snap)
+        assert snap["trick_so_far_len"] == i, (i, snap)

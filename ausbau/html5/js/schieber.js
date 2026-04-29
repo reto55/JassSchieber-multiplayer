@@ -657,7 +657,11 @@ function onSpielEnd(msg) {
   }
   if (msg.match) appendLog('🎯 Match! +100');
   if (msg.stoeck_team) {
-    const lbl = msg.stoeck_team === 'sn' ? 'Süd-Nord' : 'Ost-West';
+    let lbl;
+    if (msg.stoeck_team === 'sn') lbl = 'Süd-Nord';
+    else if (msg.stoeck_team === 'ow') lbl = 'Ost-West';
+    else if (msg.stoeck_team === 'both') lbl = 'beide Teams';
+    else lbl = msg.stoeck_team;
     appendLog(`Stöck: Team ${lbl}`);
   }
 }

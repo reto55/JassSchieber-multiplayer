@@ -167,10 +167,18 @@ function openWs() {
 function handleWsMessage(msg) {
   if (!msg || !msg.type) return;
   // Lobby-relevant lifecycle events: refresh state.
+  // These are the ACTUAL event names the server emits (per the
+  // schieber-protocol skill).  An earlier draft listened on
+  // `seat_joined` / `seat_left` / etc., but the backend never emitted
+  // those — leaving the lobby stale until a manual reload.
   const lobbyEvents = new Set([
-    'seat_joined', 'seat_left', 'seat_kicked',
-    'seat_disconnected', 'seat_reconnected',
-    'host_changed', 'spectator_joined', 'spectator_left',
+    'seat_changed',
+    'seat_paused',
+    'seat_reclaimed',
+    'seat_ai_takeover',
+    'seat_kicked',
+    'host_changed',
+    'spectator_count_changed',
   ]);
   if (lobbyEvents.has(msg.type)) {
     refresh();

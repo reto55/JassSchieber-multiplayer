@@ -480,6 +480,26 @@ class GameSession:
             },
             except_seat=position,
         )
+        # Reclaim-mid-turn: if it was this seat's turn to play when the
+        # disconnect happened, re-send a fresh `play_request` now so the
+        # reclaiming client doesn't have to wait for the next iteration
+        # (`_room_resume` carries the snapshot but no actionable prompt).
+        if (
+            self.state == "playing"
+            and self.current_play is not None
+            and self._current_seat_turn == position
+        ):
+            play = self.current_play
+            hand = getattr(play, position, None)
+            if hand is not None:
+                lead_suit = self._lead_suit_from_trick_so_far()
+                valid = get_valid_cards(hand, lead_suit, play.operator)
+                await self.send_to_seat(position, {
+                    "type": "play_request",
+                    "trick_so_far": list(self._current_trick_so_far),
+                    "lead_suit": lead_suit,
+                    "valid_cards": valid,
+                })
         seat.state_event.set()
         # A human is back; reset the idle window (spec §2.3 — reaper
         # ignores rooms with at least one connected human).
@@ -490,6 +510,29 @@ class GameSession:
         # human — typically the seat that just reclaimed.
         if not self._has_connected_host():
             await self._transfer_host()
+
+    def _lead_suit_from_trick_so_far(self) -> Optional[str]:
+        """Derive the live lead suit from `_current_trick_so_far`.
+
+        The trick-so-far snapshot stores card CSS codes (e.g. ``"EA"``,
+        ``"SIU"``). The first entry is the lead, so its suit prefix
+        determines the lead suit. Returns ``None`` if the trick has not
+        started yet (i.e. the reclaiming seat is the lead).
+        """
+        if not self._current_trick_so_far:
+            return None
+        lead_code = self._current_trick_so_far[0]["card"]
+        # Inverse of SUIT_PREFIX. Two-letter prefixes (`SE`, `SI`) come
+        # FIRST so a code like "SIU" is matched against "SI" before "S".
+        for suit, prefix in (
+            ("Schellen", "SE"),
+            ("Schilten", "SI"),
+            ("Eicheln", "E"),
+            ("Rosen", "R"),
+        ):
+            if lead_code.startswith(prefix):
+                return suit
+        return None
 
     def _has_connected_host(self) -> bool:
         """True iff some seat is held by a connected human whose principal_id
@@ -1134,6 +1177,14 @@ class GameSession:
         for i in range(4):
             hand = getattr(play, player)
             valid = get_valid_cards(hand, lead_suit, play.operator)
+
+            # Live mid-trick tracking — kept fresh per iteration so a
+            # reconnect inside this trick rebuilds the right view via
+            # `_room_resume_message_for`. Previously these were set once
+            # in `_run_spiel` before the call and went stale after the
+            # first play.
+            self._current_seat_turn = player
+            self._current_trick_so_far = list(trick_order)
 
             request_payload = {
                 "type": "play_request",

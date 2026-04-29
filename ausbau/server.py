@@ -310,6 +310,14 @@ async def join_endpoint(
     seat = room.seats[target_idx]
     seat.principal = principal
     seat.is_ai = False
+    # Broadcast lobby state change so other occupants (seats + spectators)
+    # auto-refresh without manual reload. The new joiner has no WS yet so
+    # `broadcast` only delivers to the OTHER seats and spectators here.
+    await room.broadcast({
+        "type": "seat_changed",
+        "seat": _seat_to_dict(seat, room),
+        "reason": "join",
+    })
     return {"seat": target_idx, "room_state": _room_state_dict(room)}
 
 
@@ -337,6 +345,15 @@ async def leave_endpoint(
             seat.principal = None
             seat.is_ai = True
             seat.websocket = None
+            # Lobby self-leave: announce so other occupants auto-refresh.
+            # `_disconnect_seat`'s lobby branch ALSO broadcasts a
+            # `seat_changed`, but that path is only reached on a WS drop
+            # (no explicit /leave call), so no double-broadcast here.
+            await room.broadcast({
+                "type": "seat_changed",
+                "seat": _seat_to_dict(seat, room),
+                "reason": "leave",
+            })
             if was_host:
                 await room._transfer_host()
         else:
@@ -345,6 +362,11 @@ async def leave_endpoint(
             seat.websocket = None
             seat.principal = None
             seat.state_event.set()
+            await room.broadcast({
+                "type": "seat_changed",
+                "seat": _seat_to_dict(seat, room),
+                "reason": "leave",
+            })
         # Reaper bookkeeping (Task 21, spec §2.3): an explicit leave
         # may have just emptied the room of humans.
         room._update_idle_since()
@@ -407,8 +429,15 @@ async def spectate_endpoint(
         raise HTTPException(409, "already seated; cannot spectate")
     if len(room.spectators) >= SPECTATOR_CAP_PER_ROOM:
         raise HTTPException(503, "spectator capacity reached")
+    added = False
     if _spectator_for_principal(room, principal) is None:
         room.spectators.append(Spectator(principal=principal, websocket=None))
+        added = True
+    if added:
+        await room.broadcast({
+            "type": "spectator_count_changed",
+            "count": len(room.spectators),
+        })
     return _room_state_dict(room)
 
 
@@ -432,6 +461,10 @@ async def leave_spectator_endpoint(
         except Exception:
             pass
     room.spectators.remove(spec)
+    await room.broadcast({
+        "type": "spectator_count_changed",
+        "count": len(room.spectators),
+    })
     return Response(status_code=204)
 
 

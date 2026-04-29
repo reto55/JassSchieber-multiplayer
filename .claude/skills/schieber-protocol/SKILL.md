@@ -166,6 +166,8 @@ For spectators (TV mode): `your_position: null`, `your_hand: null`, `players` li
 }
 ```
 
+`stoeck_team` ∈ `"sn" | "ow" | "both" | null`. `"both"` is the (rare but legal) case where both teams hold King + Ober of the trump suit and each scores +20; `null` means no team scored Stöck this spiel (Oben/Unten round, variant disabled, or no holder).
+
 ```json
 {"type": "game_end", "winner_team": "sn", "scores": {"sn": 1031, "ow": 940}}
 ```
@@ -182,7 +184,10 @@ For spectators (TV mode): `your_position: null`, `your_hand: null`, `players` li
 {"type": "seat_swap_request", "from_position": "compn", "from_display_name": "alice"}
 {"type": "seat_swap_committed", "swaps": [["compn", "compe"], ["compe", "compn"]]}
 {"type": "seat_swap_expired", "from_position": "compn"}
+{"type": "spectator_count_changed", "count": 3}
 ```
+
+`spectator_count_changed` is broadcast to all seats + spectators whenever a spectator joins (`POST /rooms/{code}/spectate`) or leaves (`POST /rooms/{code}/leave-spectator`). Lobby clients use it to refresh the displayed spectator count without polling.
 
 ### `error` (single seat only)
 

@@ -280,3 +280,90 @@ async def test_room_resume_your_turn_true_when_seat_matches_current_turn():
     msg_for_spec = s._room_resume_message_for(None)
     assert msg_for_spec["your_turn"] is None
     assert msg_for_spec["current_seat_turn"] == "comps"
+
+
+# ────────────────────────────────────────────────────────────────────
+# Reclaim mid-turn: re-send fresh `play_request` to the reclaiming seat
+# so the client gets an actionable prompt right away (room_resume alone
+# carries the snapshot but no prompt).
+# ────────────────────────────────────────────────────────────────────
+
+async def test_reclaim_mid_turn_resends_play_request():
+    """If the reclaiming seat IS the current turn-holder, `_reclaim_seat`
+    must push a fresh `play_request` to that seat AFTER the room_resume
+    + seat_reclaimed broadcast. Without this, the client knows the
+    snapshot but has no live prompt to act on."""
+    s = _fresh_session()
+    seat_4_humans(s)
+    s.state = "playing"
+    play = Play(spiel=1)
+    play.operator = "Eicheln"
+    s.current_play = play
+    s._current_seat_turn = "compn"
+    # Simulate a partial trick: someone has already led — that decides
+    # the lead-suit for the reclaiming seat's prompt.
+    s._current_trick_so_far = [{"position": "compo", "card": "EA"}]
+
+    seat = s._seat("compn")
+    original_principal = seat.principal
+
+    new_ws = FakeWebSocket()
+    await s._reclaim_seat("compn", new_ws, original_principal)
+
+    # The reclaiming WS must receive room_resume AND a play_request.
+    resumes = new_ws.all_sent_of_type("room_resume")
+    assert len(resumes) == 1
+    requests = new_ws.all_sent_of_type("play_request")
+    assert len(requests) == 1, f"expected 1 play_request, got {requests}"
+    req = requests[0]
+    # Lead suit is Eicheln (lead card was "EA"), so the seat's valid
+    # cards should be filtered against that suit if they have any.
+    assert req["lead_suit"] == "Eicheln"
+    assert req["trick_so_far"] == [{"position": "compo", "card": "EA"}]
+    assert isinstance(req["valid_cards"], list)
+    assert req["valid_cards"], "valid_cards must be non-empty"
+
+
+async def test_reclaim_mid_turn_no_play_request_when_not_active_seat():
+    """If the reclaiming seat is NOT the current turn-holder, no
+    `play_request` is pushed — the room_resume snapshot is enough."""
+    s = _fresh_session()
+    seat_4_humans(s)
+    s.state = "playing"
+    play = Play(spiel=1)
+    play.operator = "Eicheln"
+    s.current_play = play
+    s._current_seat_turn = "compo"  # someone else's turn
+    s._current_trick_so_far = []
+
+    seat = s._seat("compn")
+    original_principal = seat.principal
+
+    new_ws = FakeWebSocket()
+    await s._reclaim_seat("compn", new_ws, original_principal)
+
+    assert new_ws.all_sent_of_type("play_request") == []
+
+
+async def test_reclaim_mid_turn_lead_suit_none_when_leading():
+    """Reclaiming seat is the lead and the trick hasn't started yet:
+    `lead_suit` in the re-sent prompt is None (player is leading)."""
+    s = _fresh_session()
+    seat_4_humans(s)
+    s.state = "playing"
+    play = Play(spiel=1)
+    play.operator = "Eicheln"
+    s.current_play = play
+    s._current_seat_turn = "compn"
+    s._current_trick_so_far = []  # no plays yet → leading
+
+    seat = s._seat("compn")
+    original_principal = seat.principal
+
+    new_ws = FakeWebSocket()
+    await s._reclaim_seat("compn", new_ws, original_principal)
+
+    requests = new_ws.all_sent_of_type("play_request")
+    assert len(requests) == 1
+    assert requests[0]["lead_suit"] is None
+    assert requests[0]["trick_so_far"] == []
