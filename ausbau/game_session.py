@@ -431,6 +431,22 @@ class GameSession:
             except_seat=position,
         )
         seat.state_event.set()
+        # Spec §8.6: if the room currently has no connected host (e.g. the
+        # original host disconnected and timed out, leaving host_principal_id
+        # pointing at a seat that's now AI), promote the oldest-connected
+        # human — typically the seat that just reclaimed.
+        if not self._has_connected_host():
+            await self._transfer_host()
+
+    def _has_connected_host(self) -> bool:
+        """True iff some seat is held by a connected human whose principal_id
+        equals the room's host_principal_id."""
+        for seat in self.seats:
+            if seat.is_ai or seat.websocket is None or seat.principal is None:
+                continue
+            if principal_id(seat.principal) == self.host_principal_id:
+                return True
+        return False
 
     async def _record_seat_swap_request(
         self, from_pos: str, to_pos: str, from_display: str

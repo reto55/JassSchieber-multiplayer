@@ -338,6 +338,15 @@ async def leave_endpoint(
     seat = next(s for s in room.seats if s.position == target_pos)
     if seat.is_ai or seat.principal is None:
         return Response(status_code=204)
+
+    # Spec §8.6: host kicking themselves is treated as ordinary leave —
+    # drop the seat and transfer host. This avoids hostless-room ambiguity
+    # and matches the "self-leave" path's semantics.
+    is_self_kick = (
+        seat.principal is not None
+        and principal_id(seat.principal) == room.host_principal_id
+    )
+
     if seat.websocket is not None:
         try:
             await seat.websocket.close(code=1008, reason="kicked from room")
@@ -346,6 +355,16 @@ async def leave_endpoint(
     seat.principal = None
     seat.is_ai = True
     seat.websocket = None
+
+    if is_self_kick:
+        # Behave like self-leave for host: transfer host to next-oldest.
+        await room._transfer_host()
+    else:
+        await room.broadcast({
+            "type": "seat_kicked",
+            "position": target_pos,
+            "by_host": True,
+        })
     return Response(status_code=204)
 
 
