@@ -519,12 +519,7 @@ class GameSession:
         """
         # Per-position eligible weis (used to validate declarations and as
         # the AI auto-announce default).
-        hand_for = {
-            "comps": play.comps,
-            "compn": play.compn,
-            "compo": play.compo,
-            "compe": play.compe,
-        }
+        hand_for = {pos: getattr(play, pos) for pos in PLAYERS}
         eligible: dict[str, list] = {}
         for pos in PLAYERS:
             eligible[pos] = describe_weis(
@@ -539,32 +534,79 @@ class GameSession:
                 "your_weis": eligible[pos],
             })
 
-        # Collect announcements per seat.
+        # Collect announcements per seat. Mirror `_trump_phase`'s tight
+        # contract: the only acceptable shape is
+        # ``{"type": "announce_weis", "announce": bool, "weis": ?}``. Any
+        # other type or non-dict payload triggers an `error` reply followed
+        # by a fresh `weis_request` for the SAME seat (per-seat re-prompt
+        # loop). `announce` MUST be a bool — missing or wrong type also
+        # re-prompts. Only a valid `announce_weis` message proceeds.
         declared: dict[str, list] = {}
         for pos in PLAYERS:
             seat = self._seat(pos)
             own = eligible[pos]
             if seat.is_ai:
+                # TODO(future): support bluffing / strategic withholding when sub-project C lands.
                 # AI auto-announces everything eligible.
                 if own:
                     declared[pos] = own
                 continue
 
-            msg = await self._await_seat_action(pos, valid_actions={
-                "type": "weis",
-            })
-            announce = bool(msg.get("announce")) if isinstance(msg, dict) else False
-            if not announce:
-                continue
-            selected = msg.get("weis") if isinstance(msg, dict) else None
-            if isinstance(selected, list) and selected:
-                names = set(selected)
-                filtered = [w for w in own if w["name"] in names]
-                if filtered:
-                    declared[pos] = filtered
-            elif own:
-                # announce=True with no/empty selection → announce all.
-                declared[pos] = own
+            while True:
+                msg = await self._await_seat_action(pos, valid_actions={
+                    "type": "weis",
+                })
+                if not isinstance(msg, dict):
+                    await self.send_to_seat(pos, {
+                        "type": "error",
+                        "message": (
+                            f"Erwartet: 'announce_weis', erhalten: {msg!r}."
+                        ),
+                    })
+                    await self.send_to_seat(pos, {
+                        "type": "weis_request",
+                        "your_weis": own,
+                    })
+                    continue
+                mtype = msg.get("type")
+                if mtype != "announce_weis":
+                    await self.send_to_seat(pos, {
+                        "type": "error",
+                        "message": (
+                            f"Erwartet: 'announce_weis', erhalten: {mtype!r}."
+                        ),
+                    })
+                    await self.send_to_seat(pos, {
+                        "type": "weis_request",
+                        "your_weis": own,
+                    })
+                    continue
+                announce = msg.get("announce")
+                if not isinstance(announce, bool):
+                    await self.send_to_seat(pos, {
+                        "type": "error",
+                        "message": (
+                            f"Erwartet: 'announce' als bool, erhalten: {announce!r}."
+                        ),
+                    })
+                    await self.send_to_seat(pos, {
+                        "type": "weis_request",
+                        "your_weis": own,
+                    })
+                    continue
+                # Valid `announce_weis` — process it and break the per-seat loop.
+                if not announce:
+                    break
+                selected = msg.get("weis")
+                if isinstance(selected, list) and selected:
+                    names = set(selected)
+                    filtered = [w for w in own if w["name"] in names]
+                    if filtered:
+                        declared[pos] = filtered
+                elif own:
+                    # announce=True with no/empty selection → announce all.
+                    declared[pos] = own
+                break
 
         # Tally per team.
         sn_pts = sum(w["points"] for p in SN_PLAYERS if p in declared

@@ -17,9 +17,9 @@ import pytest
 
 from Cards_refactored import SUITS
 from ausbau.game_session import GameSession
-from ausbau.room import Variant
+from ausbau.room import Spectator, Variant
 from frontend.auth.guest import Guest
-from tests.multiplayer.conftest import seat_4_humans
+from tests.multiplayer.conftest import FakeWebSocket, seat_4_humans
 
 
 pytestmark = pytest.mark.asyncio
@@ -184,3 +184,162 @@ async def test_weis_decline():
     # Only OW (compo) scored.
     assert s.point_ow == 20
     assert s.point_sn == 0
+
+
+async def test_weis_request_not_sent_to_spectator():
+    """Spectators must NOT receive `weis_request` (per-seat redaction).
+
+    They DO receive the broadcast `weis_resolution` so TV-mode reflects
+    the outcome.
+    """
+    s = _fresh_session()
+    wss = seat_4_humans(s)
+    play = FakePlay()
+
+    spec_ws = FakeWebSocket()
+    s.spectators.append(Spectator(
+        principal=Guest(guest_id="z" * 32),
+        websocket=spec_ws,
+    ))
+
+    # Seats decline; only `weis_resolution` should land on the spectator.
+    for pos in ("compo", "compn", "compe", "comps"):
+        s._seat(pos).incoming.put_nowait(
+            {"type": "announce_weis", "announce": False}
+        )
+
+    factory = _describe_weis_per_position({
+        "compo": [], "compn": [], "compe": [], "comps": [],
+    })
+    with patch("ausbau.game_session.describe_weis", side_effect=factory(play)):
+        await s._weis_phase(play)
+
+    assert spec_ws.last_sent_of_type("weis_request") is None, (
+        f"spectator received weis_request (per-seat redaction violated): "
+        f"{spec_ws.sent}"
+    )
+    assert spec_ws.last_sent_of_type("weis_resolution") is not None, (
+        f"spectator did not receive weis_resolution broadcast: {spec_ws.sent}"
+    )
+
+
+async def test_weis_phase_rejects_wrong_type_then_re_prompts():
+    """Wrong message `type` triggers `error` + re-sent `weis_request`,
+    then the seat's next valid `announce_weis` proceeds normally.
+    """
+    s = _fresh_session()
+    wss = seat_4_humans(s)
+    play = FakePlay()
+
+    dreier = {"name": "Dreier", "suit": "Eicheln", "points": 20}
+    weis_by_pos = {
+        "compo": [dreier],
+        "compn": [],
+        "compe": [],
+        "comps": [],
+    }
+
+    # compo first sends wrong type (play_card), then a valid announce_weis.
+    s._seat("compo").incoming.put_nowait(
+        {"type": "play_card", "announce": True, "weis": ["Dreier"]}
+    )
+    s._seat("compo").incoming.put_nowait(
+        {"type": "announce_weis", "announce": True, "weis": ["Dreier"]}
+    )
+    for pos in ("compn", "compe", "comps"):
+        s._seat(pos).incoming.put_nowait(
+            {"type": "announce_weis", "announce": False}
+        )
+
+    factory = _describe_weis_per_position(weis_by_pos)
+    with patch("ausbau.game_session.describe_weis", side_effect=factory(play)):
+        await s._weis_phase(play)
+
+    # Error reply landed on compo.
+    errors = wss["compo"].all_sent_of_type("error")
+    assert any(
+        "announce_weis" in e.get("message", "") for e in errors
+    ), f"expected error mentioning 'announce_weis', got: {errors}"
+
+    # compo got at least 2 weis_request messages (initial + re-prompt).
+    reqs = wss["compo"].all_sent_of_type("weis_request")
+    assert len(reqs) >= 2, (
+        f"expected re-prompt after error, got {len(reqs)} weis_request(s): {reqs}"
+    )
+    # Re-prompt preserves the seat's own eligible weis (no leak / no loss).
+    assert reqs[-1]["your_weis"] == [dreier]
+
+    # Resolution proceeds: compo's announcement was honored.
+    res = wss["compo"].last_sent_of_type("weis_resolution")
+    assert res is not None
+    assert res["weis_by_position"] == {"compo": [dreier]}
+    assert res["winning_team"] == "ow"
+    assert s.point_ow == 20
+
+
+async def test_weis_no_cross_seat_leak():
+    """Two seats with non-trivial weis: each `weis_request.your_weis`
+    contains ONLY that seat's own entries (no partner / opponent leak).
+    """
+    s = _fresh_session()
+    wss = seat_4_humans(s)
+    play = FakePlay()
+
+    dreier = {"name": "Dreier", "suit": "Eicheln", "points": 20}
+    vierter = {"name": "Vierter", "suit": "Rosen", "points": 50}
+    weis_by_pos = {
+        # compo (OW) and compn (SN) both have weis — different ones.
+        "compo": [dreier],
+        "compn": [vierter],
+        "compe": [],
+        "comps": [],
+    }
+
+    # All seats announce — exercises both the announce branch and the
+    # per-seat `your_weis` redaction.
+    s._seat("compo").incoming.put_nowait(
+        {"type": "announce_weis", "announce": True, "weis": ["Dreier"]}
+    )
+    s._seat("compn").incoming.put_nowait(
+        {"type": "announce_weis", "announce": True, "weis": ["Vierter"]}
+    )
+    s._seat("compe").incoming.put_nowait(
+        {"type": "announce_weis", "announce": False}
+    )
+    s._seat("comps").incoming.put_nowait(
+        {"type": "announce_weis", "announce": False}
+    )
+
+    factory = _describe_weis_per_position(weis_by_pos)
+    with patch("ausbau.game_session.describe_weis", side_effect=factory(play)):
+        await s._weis_phase(play)
+
+    # Each seat's `your_weis` matches their own entry — and ONLY their own.
+    for pos, expected in weis_by_pos.items():
+        req = wss[pos].last_sent_of_type("weis_request")
+        assert req is not None, f"{pos} did not receive weis_request"
+        assert req["your_weis"] == expected, (
+            f"{pos} weis_request leaked or mis-redacted: got {req['your_weis']}, "
+            f"expected {expected}"
+        )
+
+    # Cross-seat assertion: nobody sees another seat's weis names in their
+    # OWN your_weis list.
+    own_names = {pos: {w["name"] for w in expected}
+                 for pos, expected in weis_by_pos.items()}
+    for pos in PLAYERS_ORDER:
+        req = wss[pos].last_sent_of_type("weis_request")
+        seen_names = {w["name"] for w in req["your_weis"]}
+        # Names not in this seat's own set must NOT appear.
+        for other_pos, other_names in own_names.items():
+            if other_pos == pos:
+                continue
+            leaked = (other_names - own_names[pos]) & seen_names
+            assert not leaked, (
+                f"{pos} saw {other_pos}'s weis names: {leaked}"
+            )
+
+
+# Used by the cross-seat-leak test above. Keep in sync with
+# `ausbau.game_session.PLAYERS`.
+PLAYERS_ORDER = ("comps", "compo", "compn", "compe")
