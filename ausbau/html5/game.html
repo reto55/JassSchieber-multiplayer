@@ -7,6 +7,13 @@
   <link rel="stylesheet" href="/static/css/game.css">
 </head>
 <body>
+<div id="auth-strip" style="position:fixed;top:0;left:0;right:0;background:#222;color:#eee;
+                            padding:.4rem 1rem;display:flex;justify-content:space-between;
+                            font:14px system-ui;z-index:1000">
+  <span>Schieber</span>
+  <span id="auth-info">…</span>
+</div>
+<div style="height:2.2rem"></div>
 <div id="game">
 
   <!-- ① AI Bar -->
@@ -59,20 +66,25 @@
       <span id="active-player"></span>
     </div>
 
-    <!-- ③ Trick area -->
+    <!-- ③ Trick area — slot ids are historic (comps/compn/etc.) but
+         the .trick-label text is repainted by JS at runtime according
+         to the local seat's POV (`computeLayout`). The spatial layout
+         (top / left / centre / right) maps to layout roles
+         (top / left / bottom / right) regardless of which position
+         the local seat is. -->
     <div id="trick-area">
       <div class="trick-slot" id="trick-compn">
-        <span class="trick-label">Nord</span>
+        <span class="trick-label">Top</span>
       </div>
       <div id="trick-middle-row">
         <div class="trick-slot" id="trick-compe">
-          <span class="trick-label">West</span>
+          <span class="trick-label">Left</span>
         </div>
         <div class="trick-slot" id="trick-comps">
           <span class="trick-label">Du</span>
         </div>
         <div class="trick-slot" id="trick-compo">
-          <span class="trick-label">Ost</span>
+          <span class="trick-label">Right</span>
         </div>
       </div>
     </div>

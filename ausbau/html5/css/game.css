@@ -376,3 +376,32 @@ html, body {
 .btn-secondary:hover { background: #555; }
 
 .hidden { display: none !important; }
+
+/* Paused / AI-takeover seat — multiplayer (Task 23) */
+.ai-player.paused .ai-avatar {
+  border-color: #c08020;
+  background: #3a2200;
+  color: #f0c050;
+}
+.ai-player.paused .ai-name {
+  color: #f0c050;
+  font-style: italic;
+}
+.ai-player.ai .ai-avatar {
+  border-color: #4060a0;
+  background: #1a2840;
+  color: #9bbfff;
+}
+.ai-player.ai .ai-name {
+  color: #9bbfff;
+}
+
+/* Invalid-card shake (used after `error` from server) */
+@keyframes schieber-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-6px); }
+  40% { transform: translateX(6px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(4px); }
+}
+#hand-cards.shake { animation: schieber-shake .35s ease-in-out; }

@@ -5,7 +5,9 @@ description: Ground-truth WebSocket message contract between Schieber backend (`
 
 # Schieber WebSocket Protocol
 
-Authoritative message contract. Backend at `ws://.../ws` pushes state, client sends user actions.
+Ground-truth message contract between the Schieber server (`ausbau/server.py` + `ausbau/game_session.py`) and the browser client (`ausbau/html5/js/schieber.js`).
+
+**Connection model (multiplayer):** Each room is identified by a 6-char code. Each player opens one WebSocket to `/ws/{code}`. The server holds a `GameSession` per room and routes messages per-seat. Spectators connect to the same `/ws/{code}` and receive a TV-mode broadcast (no hands).
 
 ## Card Codes
 
@@ -27,197 +29,256 @@ Example: `EA` = Eichel-Ass, `SIU` = Schilten-Under (Trumpf-Under in Schilten gam
 
 ## Position Keys
 
-Internal: `comps` (Süd / human), `compo` (Ost), `compn` (Nord), `compe` (West).
-Display names: `"Süd"`, `"Ost"`, `"Nord"`, `"West"`.
+Internal: `comps` (Süd), `compo` (Ost), `compn` (Nord), `compe` (West).
+Teams: `(compo, compe)` is East-West (`ow`); `(compn, comps)` is North-South (`sn`).
 
-Server sends both `player_key` (internal) and `player` (display) in most events; client may use either.
+## Routing helpers
 
-## Server → Client
+```python
+async def send_to_seat(self, position: str, msg: dict) -> None:
+    seat = self._seat(position)
+    if seat.websocket is not None and not seat.is_ai:
+        try:
+            await seat.websocket.send_json(msg)
+        except Exception:
+            await self._disconnect_seat(position)
 
-### `game_start`
 
-First message on connection. One-shot.
+async def broadcast(self, msg: dict, *, except_seat: str | None = None) -> None:
+    for seat in self.seats:
+        if seat.position != except_seat:
+            await self.send_to_seat(seat.position, msg)
+    for spec in list(self.spectators):
+        try:
+            await spec.websocket.send_json(msg)
+        except Exception:
+            self.spectators.remove(spec)
+
+
+async def broadcast_per_seat(self, msg_factory) -> None:
+    """Each seat receives msg_factory(seat); spectators receive msg_factory(None)."""
+    for seat in self.seats:
+        await self.send_to_seat(seat.position, msg_factory(seat))
+    tv_msg = msg_factory(None)
+    for spec in list(self.spectators):
+        try:
+            await spec.websocket.send_json(tv_msg)
+        except Exception:
+            self.spectators.remove(spec)
 ```
-{ "type": "game_start",
-  "hand": ["EA","EK",...],       // 9 codes, human's cards
-  "first_player": "Süd",         // display name of starter
-  "players": [                   // the three NON-HUMAN seats (compe, compn, compo)
-    { "name": "West", "position": "compe", "is_partner": false, "card_count": 9 },
-    { "name": "Nord", "position": "compn", "is_partner": true,  "card_count": 9 },
-    { "name": "Ost",  "position": "compo", "is_partner": false, "card_count": 9 }
+
+## Server → Client Messages
+
+### `game_start` (broadcast_per_seat)
+
+For seat `compn`:
+```json
+{
+  "type": "game_start",
+  "your_position": "compn",
+  "your_hand": ["EA","SK", ...],
+  "first_player": "compo",
+  "players": [
+    {"position": "compo", "display_name": "alice",       "card_count": 9, "is_partner": true},
+    {"position": "compe", "display_name": "AI (compe)",  "card_count": 9, "is_partner": false},
+    {"position": "comps", "display_name": "Guest-3f9a",  "card_count": 9, "is_partner": false}
   ],
-  "scores": { "sn": <int>, "ow": <int> },  // running totals at deal time (0 for spiel 1)
-  "target": 1000 }               // game-end target score; stable for the session
+  "scores": {"sn": 0, "ow": 0},
+  "target": 1000,
+  "variant": {"trumpf_bock": false, "match_bonus": true, "stoeck": true}
+}
 ```
 
-`players` enumerates the three AI seats only — the human (`comps`) is implicit and rendered at the bottom of the table. Each entry: `name` (display), `position` (internal key), `is_partner` (true for the human's partner, i.e. `compn`), `card_count` (cards remaining — 9 at deal, decremented client-side on `card_played`). `scores` and `target` drive the HUD.
+For spectators (TV mode): `your_position: null`, `your_hand: null`, `players` lists all 4 with no `is_partner` field.
 
-### `trump_request`
+### `trump_request` / `trump_pending` / `trump_chosen`
 
-Server asks a player (human = `comps`) to choose trump or schieben.
-```
-{ "type": "trump_request",
-  "can_schieben": true/false }   // false after one schieben
-```
-Human replies with `choose_trump` or `schieben`.
-
-### `trump_chosen`
-
-Broadcast after any player (human or AI) chose trump.
-```
-{ "type": "trump_chosen",
-  "suit": "Eicheln"|"Rosen"|"Schellen"|"Schilten"|"Oben"|"Unten",
-  "by": "Süd" }                  // display name of chooser
+`trump_request` → only the seat whose turn it is to choose:
+```json
+{"type": "trump_request", "schieben_allowed": true}
 ```
 
-### `weis_request`
-
-Server asks human which Weis to announce (Weis already detected server-side).
-```
-{ "type": "weis_request",
-  "your_weis": [                 // list of Weis dicts (may be empty → request is skipped)
-    { "name": "Dreier", "suit": "Eicheln", "points": 20 },
-    { "name": "Viererle", "suit": null, "points": 100 }
-  ] }
+`trump_pending` → broadcast to others + spectators:
+```json
+{"type": "trump_pending", "by_position": "compo"}
 ```
 
-Each entry has `name` (German label), `suit` (suit where the sequence lives, or `null` for rank-based "Vier Gleiche"), and `points` (the Weis's own value). Human replies with `declare_weis`.
-
-### `weis_result`
-
-Broadcast after the Weis phase resolves (including scoring).
+`trump_chosen` → broadcast (final):
+```json
+{"type": "trump_chosen", "by_position": "compo", "operator": "Eicheln"}
 ```
-{ "type": "weis_result",
-  "announcements": [
-    { "player": "Süd",
-      "weis": [ { "name": "Dreier", "suit": "Eicheln", "points": 20 }, ... ],
-      "points": 20 },            // sum for this player's announced weis
-    ...
+
+### `weis_request` / `weis_resolution`
+
+`weis_request` → each seat individually with their own weis:
+```json
+{"type": "weis_request", "your_weis": [{"name": "Dreier", "suit": "Eicheln", "points": 20}]}
+```
+
+`weis_resolution` → broadcast (everyone sees winner team and per-position weis):
+```json
+{
+  "type": "weis_resolution",
+  "winning_team": "sn",
+  "weis_by_position": {
+    "compo": [...], "compn": [...], "compe": [...], "comps": [...]
+  }
+}
+```
+
+`winning_team` is `"sn"`, `"ow"`, or `"tie"`. Per Task 11 it is computed from the sum of declared (announced) weis points per team for THIS phase (tie → `"tie"`, no points awarded). Seats that declined or had no weis are omitted from `weis_by_position` (the field maps only declared positions to their announced weis lists).
+
+### `play_request` / `play_pending` / `card_played`
+
+`play_request` → only the seat whose turn it is:
+```json
+{
+  "type": "play_request",
+  "trick_so_far": [{"position": "compe", "card": "EA"}],
+  "lead_suit": "Eicheln",
+  "valid_cards": ["E6","E8","SI9"]
+}
+```
+
+`play_pending` → broadcast to others + spectators:
+```json
+{"type": "play_pending", "by_position": "compn", "trick_so_far": [...]}
+```
+
+`card_played` → broadcast (final):
+```json
+{"type": "card_played", "by_position": "compn", "card": "E6"}
+```
+
+### `trick_end` / `spiel_end` / `game_end`
+
+```json
+{"type": "trick_end", "winner_position": "compe", "winner_team": "ow", "points": 14}
+```
+
+```json
+{
+  "type": "spiel_end",
+  "scores": {"sn": 157, "ow": 100},
+  "weis_added": {"sn": 20, "ow": 0},
+  "match": false,
+  "stoeck_team": "sn"
+}
+```
+
+`stoeck_team` ∈ `"sn" | "ow" | "both" | null`. `"both"` is the (rare but legal) case where both teams hold King + Ober of the trump suit and each scores +20; `null` means no team scored Stöck this spiel (Oben/Unten round, variant disabled, or no holder).
+
+```json
+{"type": "game_end", "winner_team": "sn", "scores": {"sn": 1031, "ow": 940}}
+```
+
+### Lifecycle events (broadcast)
+
+```json
+{"type": "seat_paused", "position": "compn", "reconnect_deadline_secs": 60, "display_name": "bob"}
+{"type": "seat_reclaimed", "position": "compn", "display_name": "bob"}
+{"type": "seat_ai_takeover", "position": "compn"}
+{"type": "seat_changed", "seat": {...}, "reason": "join"|"leave"|"disconnect"|"kick"|"ai_takeover"}
+{"type": "seat_kicked", "position": "compn", "by_host": true}
+{"type": "host_changed", "old_host_position": "compn", "new_host_position": "compo", "new_host_display_name": "alice"}
+{"type": "seat_swap_request", "from_position": "compn", "from_display_name": "alice"}
+{"type": "seat_swap_committed", "swaps": [["compn", "compe"], ["compe", "compn"]]}
+{"type": "seat_swap_expired", "from_position": "compn"}
+{"type": "spectator_count_changed", "count": 3}
+```
+
+`spectator_count_changed` is broadcast to all seats + spectators whenever a spectator joins (`POST /rooms/{code}/spectate`) or leaves (`POST /rooms/{code}/leave-spectator`). Lobby clients use it to refresh the displayed spectator count without polling.
+
+### `error` (single seat only)
+
+```json
+{"type": "error", "message": "card not in hand"}
+```
+
+Sent only to the seat that triggered. Followed by re-send of the most-recent prompt to the same seat.
+
+### `room_resume` (reconnect / spectator attach)
+
+For a reclaiming seat:
+```json
+{
+  "type": "room_resume",
+  "your_position": "compn",
+  "your_hand": ["E6","R9", ...],
+  "phase": "play",
+  "scores": {"sn": 80, "ow": 60},
+  "operator": "Eicheln",
+  "variant": {"trumpf_bock": false, "match_bonus": true, "stoeck": true},
+  "trick_so_far": [{"position": "compo", "card": "EA"}],
+  "missed_tricks": [
+    {"by": ["compo:E7","compn:R6","compe:RA","comps:E9"],
+     "winner_position": "compe", "points": 18}
   ],
-  "scores": { "sn": <int>, "ow": <int> } }  // running totals AFTER weis are added
+  "your_turn": false,
+  "current_seat_turn": "comps"
+}
 ```
 
-`announcements[].weis` are dicts (same shape as `weis_request.your_weis` entries). `announcements[].points` is the sum for that player. Entries are ordered by seat. Players with no announced Weis are omitted. `scores` reflects totals after the winning-team's Weis points are added.
+For a spectator: `your_position: null`, `your_hand: null`, `your_turn: null`.
 
-### `your_turn`
+`missed_tricks` includes up to 3 most-recent completed tricks.
 
-Server prompts human to play a card. Arrives whenever `comps` is on turn.
-```
-{ "type": "your_turn",
-  "valid_cards": ["EA","RO",...] }  // codes currently legal to play
-```
-Human replies with `play_card`. If human replies with an illegal card, server sends `error` + repeats `your_turn`.
+## Client → Server Messages
 
-### `card_played`
+Same shape as today's single-WS protocol:
 
-Broadcast whenever any player (including human) plays a card.
-```
-{ "type": "card_played",
-  "player": "Süd",                // display
-  "player_key": "comps",          // internal
-  "card": "EA",
-  "trick_so_far": [               // optional — cards played in the current trick so far, in play order
-    { "player_key": "compn", "card": "EK" },
-    ...
-  ] }
+```json
+{"type": "choose_trump", "operator": "Eicheln"}
+{"type": "schieben"}
+{"type": "play_card", "card": "E6"}
 ```
 
-`trick_so_far` is optional; live clients can reconstruct the trick from the stream of `card_played` events themselves. It is intended for reconnect / observer clients that join mid-trick — when emitted, each entry represents one already-played card in this same trick and the final entry is the current card.
-
-### `trick_end`
-
-Broadcast after the 4th card of a trick. Sent before the next `your_turn` / `card_played`.
-```
-{ "type": "trick_end",
-  "winner": "Süd",                // display
-  "winner_key": "comps",          // internal
-  "points": <int>,                // REQUIRED — point value of THIS trick only
-  "points_sn": <int>,             // optional — running team-SN total after this trick
-  "points_ow": <int>,             // optional — running team-OW total after this trick
-  "cards": [                      // optional — full trick for replay (reconnect-only)
-    { "player_key": "...", "card": "..." }, ...
-  ] }
+`announce_weis` — reply to a `weis_request`:
+```json
+{"type": "announce_weis", "announce": true,  "weis": ["Dreier"]}
+{"type": "announce_weis", "announce": true,  "weis": null}
+{"type": "announce_weis", "announce": false}
 ```
 
-`points` is the per-trick value (0..any). `points_sn`/`points_ow` are convenience running totals; clients may use them or keep their own totals. `cards` is optional and intended for reconnect / observer clients — live clients already have the cards from the preceding `card_played × 4` stream.
+Semantics:
+- `announce=false` (or `weis=[]`) → seat declines; their entry is excluded from `weis_resolution.weis_by_position`.
+- `announce=true` with `weis=null` (or missing) → announce ALL eligible weis from this seat's `your_weis`.
+- `announce=true` with `weis=[<name>, ...]` → announce only the entries whose `name` matches; entries not in this seat's `your_weis` are dropped.
+- Empty resulting set → seat is excluded from `weis_resolution.weis_by_position`.
 
-### `round_end`
+A seat that received `your_weis: []` may reply with `{"type": "announce_weis", "announce": false}` (recommended) or skip silently — Task 11's multi-seat phase requires every seat to respond before broadcasting `weis_resolution`.
 
-After 9 tricks.
-```
-{ "type": "round_end",
-  "score_sn": <int>,                // running total for SN after this round
-  "score_ow": <int>,                // running total for OW after this round
-  "winner_team": "sn"|"ow"|"tie",   // who led this round — not game winner
-  "target": 1000 }                  // game-end target, stable for the session
-```
+Legacy single-WS path (`/ws`): used `{"type": "declare_weis", "announce": bool, "weis": [...]}`. The multi-seat path standardises on `announce_weis`. Clients on `/ws/{code}` MUST use `announce_weis`.
 
-`winner_team` is the team with the higher round total (or `"tie"` if equal) — it is NOT the game winner. Same token set as `game_end.winner_team` for consistency. Followed immediately by a fresh `game_start` unless a `game_end` fires first.
+The server attributes each message to the WS that sent it (= that seat). Validation: right seat's turn, card in seat's hand, etc. Out-of-turn or invalid messages → `error` reply on the same seat's WS only.
 
-### `game_end`
+## Reconnect & replay
 
-When a team reaches target score.
-```
-{ "type": "game_end",
-  "winner_team": "sn"|"ow",
-  "final_scores": { "sn": <int>, "ow": <int> } }
-```
+**Disconnect detection:** Three converging paths:
+1. `WebSocketDisconnect` raised in the WS reader task.
+2. `await ws.send_json(...)` raises (broken pipe).
+3. `receive_json()` raises any other exception.
 
-### `error`
+**60-second grace:** On disconnect during play (not lobby), server broadcasts `seat_paused` with countdown. A reconnect timer fires after 60 s and converts the seat to AI (but retains `principal` ownership). Reconnecting before timeout cancels the timer and reclaims the seat.
 
-Server rejected a client action. Client should surface to user.
-```
-{ "type": "error",
-  "message": "Ungültige Karte: E6" }
-```
+**Spectators:** Simpler than seat reconnect: no timer, no AI takeover. WS drop removes the spectator; reconnecting requires another `/spectate` POST.
 
-## Client → Server
+**Replay buffer:** On reconnect, `room_resume` includes `missed_tricks` (up to 3 most-recent completed tricks) so the client can catch up on missed plays.
 
-Sent only in response to a server prompt (`trump_request`, `weis_request`, `your_turn`). Spontaneous client messages are not expected.
-
-### `choose_trump`
-```
-{ "type": "choose_trump",
-  "suit": "Eicheln"|"Rosen"|"Schellen"|"Schilten"|"Oben"|"Unten" }
-```
-
-### `schieben`
-```
-{ "type": "schieben" }
-```
-Valid only when `trump_request.can_schieben` was `true`.
-
-### `declare_weis`
-```
-{ "type": "declare_weis",
-  "weis": ["Dreier"],             // list of Weis NAMES the client chose to announce
-  "announce": true/false }        // false = decline to announce any
-```
-
-`weis` entries are `name` values from the earlier `weis_request.your_weis` list. If `announce` is `false`, the client declines everything regardless of `weis` content. If `announce` is `true`:
-- non-empty `weis` → server announces exactly those entries (subset selection);
-- empty / missing `weis` → server announces ALL offered Weis (legacy all-or-nothing).
-
-### `play_card`
-```
-{ "type": "play_card",
-  "card": "EA" }
-```
-Must be in the most recent `your_turn.valid_cards`.
+**Ownership distinction:** Lost connection retains seat ownership (human can reclaim); explicit `/leave` call releases ownership (seat drops to AI immediately).
 
 ## Invariants
 
-1. **Every card string** in any message is a valid code from the table above.
-2. **Every `*_key`** field is one of `comps`, `compo`, `compn`, `compe`.
-3. **Every display-name `player` / `winner` / `by` / `first_player`** is one of `"Süd"`, `"Ost"`, `"Nord"`, `"West"`.
-4. **Turn order** is `comps → compo → compn → compe → comps …` wrapped so the lead player starts each trick.
-5. **No silent failures.** If a client action is invalid, server responds with `error` and re-sends the most recent prompt (`your_turn` or `trump_request`).
-6. **Broadcast ordering** for a trick: `card_played × 4` then `trick_end`. For a round end: `trick_end` (last trick) then `round_end`. For a game end: `round_end` then `game_end`.
+1. The server validates every client message against the current game state. Out-of-turn or invalid messages return `error` on the same seat's WS only, followed by re-send of the most-recent prompt.
+2. Each seat sees only its own hand. Spectators see no hands.
+3. Lifecycle events (`seat_paused`, `seat_reclaimed`, `seat_ai_takeover`, `host_changed`, etc.) broadcast to all seats + spectators.
+4. The 60 s reconnect grace fires only on lost connections, not on explicit `/leave` calls.
+5. After AI-takeover, the seat retains its `principal` so the original human can reclaim by reconnecting to `/ws/{code}`.
 
 ## When to Update This Skill
 
 - A new message type is added to backend or frontend → add the type here first, then implement.
 - A field is added/removed/renamed → update here, then update both sides.
-- Semantics change ("`can_schieben` now also means X") → update the relevant prose.
+- Semantics change (e.g., "`schieben_allowed` now also means X") → update the relevant prose.
 
 Drift between code and this skill is a defect, caught in QA.

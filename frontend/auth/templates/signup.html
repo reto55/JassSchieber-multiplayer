@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Sign up{% endblock %}
+{% block body %}
+<h1>Create account</h1>
+<form id="f">
+  <input name="username" placeholder="Username (3–32 chars)" required pattern="[a-zA-Z0-9_-]{3,32}">
+  <input name="email" type="email" placeholder="Email" required>
+  <input name="password" type="password" placeholder="Password (min 10 chars)" required minlength="10">
+  <button>Create account</button>
+</form>
+<p id="msg" class="err"></p>
+{% endblock %}
+{% block scripts %}<script>
+document.getElementById("f").addEventListener("submit", async e => {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  const body = JSON.stringify(Object.fromEntries(fd));
+  const r = await fetch("/auth/register", {method:"POST", body, headers: csrfHeaders});
+  if (r.status === 201) location.href = "/";
+  else {
+    const j = await r.json().catch(()=>({detail:"signup failed"}));
+    document.getElementById("msg").textContent = j.detail || "Sign up failed.";
+  }
+});
+</script>{% endblock %}

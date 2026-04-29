@@ -1,6 +1,7 @@
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+import pytest
 from Cards_refactored import Ass, Koenig, Ober, Under, Banner, Neun, Acht, Sieben, Sechs, SUITS
 from ausbau.game_session import card_to_code, hand_to_codes, find_card_in_hand
 
@@ -214,7 +215,7 @@ def test_trump_phase_human_leads_chooses():
 
     ws = AsyncMock()
     ws.receive_json = AsyncMock(return_value={"type": "choose_trump", "suit": "Eicheln"})
-    asyncio.run(session._trump_phase(ws, play))
+    asyncio.run(session._trump_phase_legacy(ws, play))
 
     assert play.operator == "Eicheln"
     calls = [c[0][0] for c in ws.send_json.call_args_list]
@@ -230,7 +231,7 @@ def test_trump_phase_human_leads_schiebt():
     play = Play(4)
     ws = AsyncMock()
     ws.receive_json = AsyncMock(return_value={"type": "schieben"})
-    asyncio.run(session._trump_phase(ws, play))
+    asyncio.run(session._trump_phase_legacy(ws, play))
 
     assert play.operator in ['Eicheln', 'Rosen', 'Schellen', 'Schilten', 'Oben', 'Unten']
     assert play.starter == 'compn'
@@ -241,7 +242,7 @@ def test_weis_phase_sends_result():
     session = GameSession()
     play = Play(1)
     ws = AsyncMock()
-    asyncio.run(session._weis_phase(ws, play))
+    asyncio.run(session._weis_phase_legacy(ws, play))
 
     last = ws.send_json.call_args_list[-1][0][0]
     assert last['type'] == 'weis_result'
@@ -263,7 +264,7 @@ def test_weis_phase_human_announces_adds_points():
     })
 
     with patch('ausbau.game_session.describe_weis', return_value=fake_weis):
-        asyncio.run(session._weis_phase(ws, play))
+        asyncio.run(session._weis_phase_legacy(ws, play))
 
     # Human (comps) is SN team — points should have increased
     assert session.point_sn >= 20
@@ -280,12 +281,12 @@ def _drive_single_trick(session, play, human_card_code):
     ws.receive_json = AsyncMock(return_value={"type": "play_card", "card": human_card_code})
     # skip the AI think-pause so tests run instantly
     with patch('ausbau.game_session.asyncio.sleep', new=AsyncMock()):
-        result = asyncio.run(session._play_trick(ws, play))
+        result = asyncio.run(session._play_trick_legacy(ws, play))
     return ws, result
 
 
 def test_play_trick_returns_winner_and_points():
-    """_play_trick must return (winner_key, points_int) so _run_spiel can emit `points`."""
+    """_play_trick_legacy must return (winner_key, points_int) so _run_spiel can emit `points`."""
     session = GameSession()
     play = Play(4)  # comps leads
     human_card = hand_to_codes(play.comps)[0]
@@ -320,11 +321,11 @@ def test_run_spiel_trick_end_includes_points_key():
     async def _fake_play_trick(self, websocket, play):
         return ('comps', next(fake_trick_values))
 
-    with patch.object(GameSession, '_trump_phase', _noop_trump), \
-         patch.object(GameSession, '_weis_phase', _noop_weis), \
-         patch.object(GameSession, '_play_trick', _fake_play_trick), \
+    with patch.object(GameSession, '_trump_phase_legacy', _noop_trump), \
+         patch.object(GameSession, '_weis_phase_legacy', _noop_weis), \
+         patch.object(GameSession, '_play_trick_legacy', _fake_play_trick), \
          patch('ausbau.game_session.asyncio.sleep', new=AsyncMock()):
-        asyncio.run(session._run_spiel(ws, 4))
+        asyncio.run(session._run_spiel_legacy(ws, 4))
 
     sent = [c[0][0] for c in ws.send_json.call_args_list]
     trick_ends = [m for m in sent if m.get('type') == 'trick_end']
@@ -378,11 +379,11 @@ def _drive_run_spiel_and_collect(session_scores):
             self.point_ow = ow
         return ('comps', 0)
 
-    with patch.object(GameSession, '_trump_phase', _noop_trump), \
-         patch.object(GameSession, '_weis_phase', _noop_weis), \
-         patch.object(GameSession, '_play_trick', _fake_play_trick), \
+    with patch.object(GameSession, '_trump_phase_legacy', _noop_trump), \
+         patch.object(GameSession, '_weis_phase_legacy', _noop_weis), \
+         patch.object(GameSession, '_play_trick_legacy', _fake_play_trick), \
          patch('ausbau.game_session.asyncio.sleep', new=AsyncMock()):
-        asyncio.run(session._run_spiel(ws, 4))
+        asyncio.run(session._run_spiel_legacy(ws, 4))
 
     return [c[0][0] for c in ws.send_json.call_args_list]
 
@@ -459,7 +460,7 @@ def test_weis_phase_subset_announces_only_selected():
         return human_weis if call_counter['n'] == 1 else []
 
     with patch('ausbau.game_session.describe_weis', side_effect=_fake_describe):
-        asyncio.run(session._weis_phase(ws, play))
+        asyncio.run(session._weis_phase_legacy(ws, play))
 
     last = ws.send_json.call_args_list[-1][0][0]
     assert last['type'] == 'weis_result'
@@ -498,7 +499,7 @@ def test_weis_phase_empty_weis_with_announce_true_keeps_all():
         return human_weis if call_counter['n'] == 1 else []
 
     with patch('ausbau.game_session.describe_weis', side_effect=_fake_describe):
-        asyncio.run(session._weis_phase(ws, play))
+        asyncio.run(session._weis_phase_legacy(ws, play))
 
     last = ws.send_json.call_args_list[-1][0][0]
     sued = [a for a in last['announcements'] if a['player'] == 'Süd']
@@ -534,7 +535,7 @@ def test_weis_phase_missing_weis_with_announce_true_keeps_all():
         return human_weis if call_counter['n'] == 1 else []
 
     with patch('ausbau.game_session.describe_weis', side_effect=_fake_describe):
-        asyncio.run(session._weis_phase(ws, play))
+        asyncio.run(session._weis_phase_legacy(ws, play))
 
     assert session.point_sn == 20
 
@@ -564,7 +565,7 @@ def test_weis_phase_announce_false_announces_nothing_even_with_weis():
         return human_weis if call_counter['n'] == 1 else []
 
     with patch('ausbau.game_session.describe_weis', side_effect=_fake_describe):
-        asyncio.run(session._weis_phase(ws, play))
+        asyncio.run(session._weis_phase_legacy(ws, play))
 
     last = ws.send_json.call_args_list[-1][0][0]
     sued = [a for a in last['announcements'] if a['player'] == 'Süd']
@@ -598,7 +599,7 @@ def test_weis_phase_subset_with_nonexistent_name_drops_it():
         return human_weis if call_counter['n'] == 1 else []
 
     with patch('ausbau.game_session.describe_weis', side_effect=_fake_describe):
-        asyncio.run(session._weis_phase(ws, play))
+        asyncio.run(session._weis_phase_legacy(ws, play))
 
     last = ws.send_json.call_args_list[-1][0][0]
     sued = [a for a in last['announcements'] if a['player'] == 'Süd']
@@ -618,7 +619,7 @@ def test_game_end_winner_team_is_normalized_token():
     async def _fake_spiel(self, websocket, spiel_num):
         return
 
-    with patch.object(GameSession, '_run_spiel', _fake_spiel):
+    with patch.object(GameSession, '_run_spiel_legacy', _fake_spiel):
         asyncio.run(session.run(ws))
 
     sent = [c[0][0] for c in ws.send_json.call_args_list]
@@ -639,7 +640,7 @@ def test_game_end_winner_team_tie():
     async def _fake_spiel(self, websocket, spiel_num):
         return
 
-    with patch.object(GameSession, '_run_spiel', _fake_spiel):
+    with patch.object(GameSession, '_run_spiel_legacy', _fake_spiel):
         asyncio.run(session.run(ws))
 
     sent = [c[0][0] for c in ws.send_json.call_args_list]
@@ -662,7 +663,7 @@ def test_trump_phase_rejects_invalid_type_then_accepts_choose_trump():
         {"type": "play_card", "card": "EA", "suit": "Schellen"},
         {"type": "choose_trump", "suit": "Eicheln"},
     ])
-    asyncio.run(session._trump_phase(ws, play))
+    asyncio.run(session._trump_phase_legacy(ws, play))
 
     # operator must reflect the VALID message, not the injected bogus suit.
     assert play.operator == "Eicheln"
@@ -694,7 +695,7 @@ def test_trump_phase_rejects_schieben_when_disallowed():
         {"type": "schieben"},  # not allowed: can_schieben was False
         {"type": "choose_trump", "suit": "Rosen"},
     ])
-    asyncio.run(session._trump_phase(ws, play))
+    asyncio.run(session._trump_phase_legacy(ws, play))
 
     assert play.operator == "Rosen"
     assert play.starter == 'comps'
@@ -720,7 +721,7 @@ def test_trump_phase_rejects_invalid_type_in_post_schieben_branch():
         {"type": "play_card", "card": "EA"},  # wrong type
         {"type": "choose_trump", "suit": "Schilten"},
     ])
-    asyncio.run(session._trump_phase(ws, play))
+    asyncio.run(session._trump_phase_legacy(ws, play))
 
     assert play.operator == "Schilten"
     sent = [c[0][0] for c in ws.send_json.call_args_list]
@@ -741,7 +742,7 @@ def test_trump_phase_loops_on_repeated_invalid_input():
         {"type": "garbage"},
         {"type": "choose_trump", "suit": "Rosen"},
     ])
-    asyncio.run(session._trump_phase(ws, play))
+    asyncio.run(session._trump_phase_legacy(ws, play))
 
     assert play.operator == "Rosen"
     sent = [c[0][0] for c in ws.send_json.call_args_list]
@@ -759,7 +760,7 @@ def test_trump_phase_schieben_still_works_when_allowed():
 
     ws = AsyncMock()
     ws.receive_json = AsyncMock(return_value={"type": "schieben"})
-    asyncio.run(session._trump_phase(ws, play))
+    asyncio.run(session._trump_phase_legacy(ws, play))
 
     assert play.starter == 'compn'  # partner takes over after schieben
     # operator set by AI partner via determine_trumpf_after_schieben()
@@ -792,7 +793,7 @@ def test_run_cycles_four_spiele_and_ends():
         seen.append(spiel_num)
         self.point_sn += 300
 
-    with patch.object(GameSession, '_run_spiel', _fake_run_spiel), \
+    with patch.object(GameSession, '_run_spiel_legacy', _fake_run_spiel), \
          patch('ausbau.game_session.asyncio.sleep', new=AsyncMock()):
         asyncio.run(session.run(ws))
 
@@ -819,7 +820,7 @@ def test_run_cycles_wrap_after_fourth_spiel():
         # 100 points per Spiel → need 10 Spiele to cross end_game.
         self.point_sn += 100
 
-    with patch.object(GameSession, '_run_spiel', _fake_run_spiel), \
+    with patch.object(GameSession, '_run_spiel_legacy', _fake_run_spiel), \
          patch('ausbau.game_session.asyncio.sleep', new=AsyncMock()):
         asyncio.run(session.run(ws))
 
@@ -846,7 +847,7 @@ def test_play_trick_rejects_wrong_type_then_accepts_valid():
         {"type": "play_card", "card": human_card},        # valid
     ])
     with patch('ausbau.game_session.asyncio.sleep', new=AsyncMock()):
-        asyncio.run(session._play_trick(ws, play))
+        asyncio.run(session._play_trick_legacy(ws, play))
 
     sent = [c[0][0] for c in ws.send_json.call_args_list]
     # Must contain at least: your_turn, error, your_turn, card_played(for human)
@@ -879,7 +880,7 @@ def test_play_trick_rejects_missing_card_key_then_accepts_valid():
         {"type": "play_card", "card": human_card},        # valid
     ])
     with patch('ausbau.game_session.asyncio.sleep', new=AsyncMock()):
-        asyncio.run(session._play_trick(ws, play))
+        asyncio.run(session._play_trick_legacy(ws, play))
 
     sent = [c[0][0] for c in ws.send_json.call_args_list]
     types = [m['type'] for m in sent]
@@ -900,7 +901,7 @@ def test_play_trick_non_string_card_rejected():
         {"type": "play_card", "card": human_card},        # valid
     ])
     with patch('ausbau.game_session.asyncio.sleep', new=AsyncMock()):
-        asyncio.run(session._play_trick(ws, play))
+        asyncio.run(session._play_trick_legacy(ws, play))
 
     sent = [c[0][0] for c in ws.send_json.call_args_list]
     types = [m['type'] for m in sent]
@@ -909,6 +910,8 @@ def test_play_trick_non_string_card_rejected():
 
 # --- E4.2: server-level protocol-shaped error on uncaught exception -------
 
+@pytest.mark.skip(reason="legacy single-WS /ws error-handling removed in multiplayer Task 9; "
+                         "new /ws/{code} endpoint has per-room connection logic")
 def test_server_sends_error_payload_before_close_on_unexpected_exception():
     """If GameSession.run raises a non-WebSocketDisconnect exception, the /ws handler
     must send a protocol-shaped `{type: "error", message: "..."}` payload before closing.
@@ -945,6 +948,8 @@ def test_server_sends_error_payload_before_close_on_unexpected_exception():
     )
 
 
+@pytest.mark.skip(reason="legacy single-WS /ws error-handling removed in multiplayer Task 9; "
+                         "new /ws/{code} endpoint has per-room connection logic")
 def test_server_disconnect_does_not_send_error_payload():
     """Regression: WebSocketDisconnect is the clean-exit path — no error payload."""
     from unittest.mock import AsyncMock, patch
@@ -966,6 +971,8 @@ def test_server_disconnect_does_not_send_error_payload():
     )
 
 
+@pytest.mark.skip(reason="legacy single-WS /ws error-handling removed in multiplayer Task 9; "
+                         "new /ws/{code} endpoint has per-room connection logic")
 def test_server_survives_if_error_send_itself_fails():
     """If the final error-send raises (e.g. socket already half-closed), the handler
     must still fall through to close() without propagating the secondary failure.
@@ -986,3 +993,58 @@ def test_server_survives_if_error_send_itself_fails():
 
     # close was still attempted
     assert ws.close.await_count >= 1 or ws.close.call_count >= 1
+
+
+# --- Task 23: WS principal injection tests --------------------------------
+
+import pytest
+
+
+@pytest.mark.skip(reason="legacy single-WS resolve_principal removed in multiplayer Task 9; "
+                         "WS attach is now per-room")
+@pytest.mark.asyncio
+async def test_resolve_principal_returns_guest_when_no_cookies(monkeypatch):
+    """resolve_principal returns a fresh Guest when neither cookie is present."""
+    # Bypass auth_settings init by stubbing the load
+    from frontend.auth.guest import Guest
+    import ausbau.server as srv
+
+    monkeypatch.setattr(srv, "_auth_settings", _StubSettings())
+    monkeypatch.setattr(srv, "_auth_factory", None)
+
+    class FakeWS:
+        cookies = {}
+
+    p = await srv.resolve_principal(FakeWS())
+    assert isinstance(p, Guest)
+
+
+@pytest.mark.skip(reason="legacy single-WS resolve_principal removed in multiplayer Task 9; "
+                         "WS attach is now per-room")
+@pytest.mark.asyncio
+async def test_resolve_principal_returns_user_when_session_cookie_valid(monkeypatch):
+    """resolve_principal returns the User from _resolve_user_from_cookie when cookie is valid."""
+    import ausbau.server as srv
+
+    fake_user = _StubUser()
+    fake_user.username = "testuser"
+
+    async def stub_resolver(token):
+        return fake_user
+
+    monkeypatch.setattr(srv, "_auth_settings", _StubSettings())
+    monkeypatch.setattr(srv, "_resolve_user_from_cookie", stub_resolver)
+
+    class FakeWS:
+        cookies = {"schieber_session": "abc"}
+
+    p = await srv.resolve_principal(FakeWS())
+    assert p is fake_user
+
+
+class _StubSettings:
+    secret_key = "k" * 32
+
+
+class _StubUser:
+    pass

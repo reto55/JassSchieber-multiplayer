@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Sign in{% endblock %}
+{% block body %}
+<h1>Sign in</h1>
+<form id="f">
+  <input name="username" type="email" placeholder="Email" required>
+  <input name="password" type="password" placeholder="Password" required>
+  <label><input type="checkbox" name="remember" value="1"> Remember me</label>
+  <button>Sign in</button>
+</form>
+<p id="msg" class="err"></p>
+<p><a href="/forgot">Forgot password?</a> · <a href="/signup">Create account</a></p>
+{% endblock %}
+{% block scripts %}<script>
+document.getElementById("f").addEventListener("submit", async e => {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  const r = await fetch("/auth/login", {method:"POST", body:fd, headers:{"X-Requested-With":"schieber"}});
+  if (r.status === 204) location.href = "/";
+  else document.getElementById("msg").textContent = "Sign in failed.";
+});
+</script>{% endblock %}
