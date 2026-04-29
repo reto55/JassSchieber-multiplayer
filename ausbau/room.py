@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import secrets
 import time
 from dataclasses import dataclass, field
@@ -9,6 +10,8 @@ from frontend.auth.models import User
 
 if TYPE_CHECKING:
     from ausbau.game_session import GameSession
+
+logger = logging.getLogger(__name__)
 
 
 POSITIONS = ('compo', 'compn', 'compe', 'comps')
@@ -98,6 +101,95 @@ def get_room(code: str):
 
 def remove_room(code: str) -> None:
     ROOMS.pop(code, None)
+
+
+async def _close_room(room) -> None:
+    """Close all spectator WSs and cancel background tasks before removal.
+
+    Module-private helper used by ``reap_rooms_once``. Best-effort: any
+    individual failure (a WS already closed, a task already done) is
+    swallowed so a single bad room cannot stall the reaper.
+    """
+    for spec in list(room.spectators):
+        try:
+            if spec.websocket is not None:
+                await spec.websocket.close(code=1001, reason="room reaped")
+        except Exception:
+            pass
+    # Cancel any outstanding reconnect / swap-TTL tasks.
+    for task in list(getattr(room, "_reconnect_tasks", {}).values()):
+        if task is not None and not task.done():
+            task.cancel()
+    for _key, (_expires, task) in list(getattr(room, "_swap_requests", {}).items()):
+        if task is not None and not task.done():
+            task.cancel()
+    game_task = getattr(room, "_game_task", None)
+    if game_task is not None and not game_task.done():
+        game_task.cancel()
+
+
+async def reap_rooms_once() -> list[str]:
+    """Single reap pass over ``ROOMS``.
+
+    Removes rooms in either of these states (spec §2.3):
+
+      a) ``state == "finished"`` for >``ROOM_FINISHED_LINGER_SECONDS``
+         seconds (since ``_finished_at``).
+      b) zero connected humans AND zero seated humans for the same
+         linger window (since ``_idle_since``).
+
+    Reaped rooms have ``_close_room`` invoked first so spectator WSs and
+    background tasks don't dangle. Returns the list of removed codes.
+
+    Best-effort per room: any single-room exception is logged and the
+    pass continues with the next code.
+    """
+    now = time.monotonic()
+    removed: list[str] = []
+    for code, room in list(ROOMS.items()):
+        try:
+            should_reap = False
+            if room.state == "finished":
+                finished_at = getattr(room, "_finished_at", None)
+                if (
+                    finished_at is not None
+                    and (now - finished_at) > ROOM_FINISHED_LINGER_SECONDS
+                ):
+                    should_reap = True
+            if not should_reap:
+                idle_since = getattr(room, "_idle_since", None)
+                if (
+                    idle_since is not None
+                    and (now - idle_since) > ROOM_FINISHED_LINGER_SECONDS
+                ):
+                    should_reap = True
+            if not should_reap:
+                continue
+            await _close_room(room)
+            ROOMS.pop(code, None)
+            removed.append(code)
+        except Exception:
+            logger.exception("reaper: failure for room %s", code)
+    return removed
+
+
+async def reaper_loop() -> None:
+    """Background task: invoke ``reap_rooms_once`` every interval.
+
+    Runs forever until cancelled. Per-iteration exceptions are logged
+    and the loop continues — a single bad iteration must not kill the
+    reaper.
+    """
+    while True:
+        await asyncio.sleep(REAPER_INTERVAL_SECONDS)
+        try:
+            # Look up the function via the module so tests that
+            # ``monkeypatch.setattr(room_mod, "reap_rooms_once", ...)``
+            # see their stub fire here.
+            import ausbau.room as _self
+            await _self.reap_rooms_once()
+        except Exception:
+            logger.exception("reaper iteration failed")
 
 
 def find_rooms_for_principal(p) -> list[dict]:

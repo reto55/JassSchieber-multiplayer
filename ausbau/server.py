@@ -112,6 +112,19 @@ async def _auth_init_db():
     await init_db(_auth_engine)
 
 
+@app.on_event("startup")
+async def _start_reaper():
+    """Spawn the rooms reaper background task (Task 21, spec §2.3).
+
+    Iterates ``ROOMS`` every ``REAPER_INTERVAL_SECONDS`` and removes
+    rooms that finished or went human-empty more than
+    ``ROOM_FINISHED_LINGER_SECONDS`` ago. Per-iteration exceptions are
+    logged inside the loop so the task survives transient errors.
+    """
+    from ausbau.room import reaper_loop
+    asyncio.create_task(reaper_loop(), name="rooms_reaper")
+
+
 # ---------------------------------------------------------------------------
 # Room CRUD helpers
 # ---------------------------------------------------------------------------
@@ -326,6 +339,9 @@ async def leave_endpoint(
             seat.websocket = None
             seat.principal = None
             seat.state_event.set()
+        # Reaper bookkeeping (Task 21, spec §2.3): an explicit leave
+        # may have just emptied the room of humans.
+        room._update_idle_since()
         return Response(status_code=204)
 
     # Kick (host-only, lobby-only)
@@ -365,6 +381,8 @@ async def leave_endpoint(
             "position": target_pos,
             "by_host": True,
         })
+    # Kick may have just removed the last human (lobby-only path).
+    room._update_idle_since()
     return Response(status_code=204)
 
 

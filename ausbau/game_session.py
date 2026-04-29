@@ -212,6 +212,15 @@ class GameSession:
         # spiele.
         self._spiel_trick_winners: list[str] = []
 
+        # Reaper bookkeeping (Task 21). ``_finished_at`` is stamped when
+        # ``start_game`` flips the room to "finished" so the reaper can
+        # honour the linger window. ``_idle_since`` is the monotonic
+        # timestamp at which the room transitioned to "no connected and
+        # no seated humans"; while ``None`` the room is considered
+        # active. See ``_update_idle_since``.
+        self._idle_since: Optional[float] = None
+        self._finished_at: Optional[float] = None
+
     def _seat(self, position: str):
         for s in self.seats:
             if s.position == position:
@@ -249,6 +258,36 @@ class GameSession:
                 principal_id(seat.principal) if seat.principal is not None else None
             ),
         }
+
+    def _seated_human_count(self) -> int:
+        """Number of seats whose principal is a human (non-AI), regardless
+        of WS connection state. Reaper input (spec §2.3)."""
+        return sum(
+            1 for s in self.seats
+            if not s.is_ai and s.principal is not None
+        )
+
+    def _connected_human_count(self) -> int:
+        """Number of seats currently held by a connected human."""
+        return sum(
+            1 for s in self.seats
+            if not s.is_ai and s.principal is not None and s.websocket is not None
+        )
+
+    def _update_idle_since(self) -> None:
+        """Recompute ``_idle_since`` from current seat occupancy.
+
+        Stamps ``_idle_since = monotonic()`` when both ``seated_human_count``
+        and ``connected_human_count`` are zero (and the timestamp wasn't
+        already set — preserve the original "started being idle" moment
+        across repeated calls). Clears it as soon as either count is
+        positive again.
+        """
+        if self._seated_human_count() == 0 and self._connected_human_count() == 0:
+            if self._idle_since is None:
+                self._idle_since = time.monotonic()
+        else:
+            self._idle_since = None
 
     async def _transfer_host(self):
         """Pick oldest-connected human as new host. No-op if none connected."""
@@ -357,6 +396,9 @@ class GameSession:
             })
             if was_host:
                 await self._transfer_host()
+            # Reaper bookkeeping: lobby drop may have just emptied the
+            # room of humans (spec §2.3).
+            self._update_idle_since()
             return
 
         # Mid-game: 60s grace window.
@@ -372,6 +414,10 @@ class GameSession:
             name=f"reconnect_timeout:{self.code}:{position}",
         )
         seat.state_event.set()  # wake any phase awaiter
+        # Mid-game disconnect drops `connected_human_count` by one; the
+        # principal stays so `seated_human_count` is unchanged and
+        # `_idle_since` only flips to "now" if all four humans are gone.
+        self._update_idle_since()
 
     async def _reconnect_timeout(self, position: str) -> None:
         """Fires ``RECONNECT_GRACE_SECONDS`` after a mid-game disconnect.
@@ -401,6 +447,10 @@ class GameSession:
         if was_host:
             await self._transfer_host()
         seat.state_event.set()
+        # AI-takeover drops the seat's `seated_human_count` to 0 for
+        # this seat (the seat is now AI). If it was the last human in
+        # the room the reaper window starts here.
+        self._update_idle_since()
 
     async def _reclaim_seat(self, position: str, websocket, principal) -> None:
         """Reclaim a seat for a returning human (spec §6.4).
@@ -431,6 +481,9 @@ class GameSession:
             except_seat=position,
         )
         seat.state_event.set()
+        # A human is back; reset the idle window (spec §2.3 — reaper
+        # ignores rooms with at least one connected human).
+        self._update_idle_since()
         # Spec §8.6: if the room currently has no connected host (e.g. the
         # original host disconnected and timed out, leaving host_principal_id
         # pointing at a seat that's now AI), promote the oldest-connected
@@ -1526,6 +1579,10 @@ class GameSession:
                 else:
                     game_winner = "tie"
                 self.state = "finished"
+                # Reaper bookkeeping (Task 21, spec §2.3): stamp the
+                # transition-to-finished moment so the linger window
+                # starts ticking now.
+                self._finished_at = time.monotonic()
                 await self.broadcast({
                     "type": "game_end",
                     "winner_team": game_winner,
