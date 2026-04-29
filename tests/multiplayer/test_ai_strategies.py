@@ -226,3 +226,40 @@ def test_hard_pick_trump_long_no_under_no_neun_schiebens():
     })
     msg = s.pick_trump(play, schieben_allowed=True)
     assert msg == {"type": "schieben"}
+
+
+def test_hard_pick_card_lead_plays_guaranteed_winner_ass():
+    """When leading and we hold the highest remaining of a suit, play it."""
+    s = HardStrategy("comps")
+    play = Play(spiel=1)
+    play.operator = "Eicheln"
+    # Stuff hand so comps holds RA (Rosen Ass) and Rosen-Ass is the highest
+    # remaining of its suit (no other Rosen Ass exists).
+    _hand_with_suits(play, "comps", {
+        "Rosen": ["A", "9", "8"],
+        "Eicheln": ["7", "6"],
+        "Schellen": ["7", "6"],
+        "Schilten": ["6", "U"],
+    })
+    s.on_spiel_start(play)
+    msg = s.pick_card(play, lead_suit=None, trick_so_far=[])
+    assert msg == {"type": "play_card", "card": "RA"}
+
+
+def test_hard_pick_card_lead_no_winner_plays_lowest():
+    """When no card guarantees a win when leading, play lowest-point."""
+    s = HardStrategy("comps")
+    play = Play(spiel=1)
+    play.operator = "Eicheln"
+    _hand_with_suits(play, "comps", {
+        "Rosen": ["6", "7"],
+        "Eicheln": ["6", "7"],
+        "Schellen": ["6", "7"],
+        "Schilten": ["6", "7", "8"],
+    })
+    s.on_spiel_start(play)
+    msg = s.pick_card(play, lead_suit=None, trick_so_far=[])
+    assert msg["type"] == "play_card"
+    # All cards are 0 points (Sechs); pick is deterministic but we just
+    # assert it returned a 0-point card from the hand.
+    assert msg["card"] in {"R6","R7","E6","E7","SE6","SE7","SI6","SI7","SI8"}

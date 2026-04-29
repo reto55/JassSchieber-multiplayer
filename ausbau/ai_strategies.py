@@ -151,6 +151,74 @@ class HardStrategy(AIStrategy):
         best_op = max(ordered, key=lambda op: (scores[op], -ordered.index(op)))
         return {"type": "choose_trump", "operator": best_op}
 
+    def _card_value(self, card_obj, operator: str) -> int:
+        """Per-card point value under the active operator."""
+        from Cards_refactored import SUITS
+        if operator in SUITS:
+            return card_obj.wtrumpf if card_obj.suit == operator else card_obj.wfarbe
+        if operator == "Oben":
+            return card_obj.woben
+        return card_obj.wunten
+
+    def _strength(self, card_obj, operator: str, lead_suit: Optional[str]):
+        """Comparable strength tuple — higher beats lower in same trick."""
+        from Cards_refactored import SUITS
+        if operator in SUITS:
+            if card_obj.suit == operator:
+                return (2, card_obj.trumpf)
+            if card_obj.suit == lead_suit:
+                return (1, card_obj.rank)
+            return (0, 0)
+        if operator == "Oben":
+            return (1, card_obj.oben) if (lead_suit is None or card_obj.suit == lead_suit) else (0, 0)
+        return (1, card_obj.unten) if (lead_suit is None or card_obj.suit == lead_suit) else (0, 0)
+
+    def _is_guaranteed_winner(self, card_obj, play) -> bool:
+        """True if this card is the highest remaining of its suit under
+        play.operator semantics — i.e., guaranteed to win an opening lead."""
+        remaining_codes = self._remaining_by_suit.get(card_obj.suit, set())
+        if not remaining_codes:
+            return True  # No competing cards exist anywhere.
+        # Reconstruct strengths for remaining codes vs ours.
+        from Cards_refactored import create_card
+        from ausbau.game_session import RANK_SUFFIX
+        inverse_rank = {v: k for k, v in RANK_SUFFIX.items()}
+        my_strength = self._strength(card_obj, play.operator, lead_suit=card_obj.suit)
+        for code in remaining_codes:
+            if code == f"{card_obj.suit}":  # safety
+                continue
+            # Strip suit prefix to get rank
+            from ausbau.ai_strategies import _split_code
+            _, rank_suffix = _split_code(code)
+            rank = inverse_rank[rank_suffix]
+            other = create_card(rank, card_obj.suit)
+            other_strength = self._strength(other, play.operator, lead_suit=card_obj.suit)
+            if other_strength > my_strength:
+                return False
+        return True
+
+    def pick_card(self, play, lead_suit: Optional[str], trick_so_far: list) -> dict:
+        from ausbau.game_session import (
+            get_valid_cards, find_card_in_hand, card_to_code,
+        )
+        hand = getattr(play, self.position)
+        valid_codes = get_valid_cards(hand, lead_suit, play.operator)
+        valid_cards = [find_card_in_hand(c, hand)[0] for c in valid_codes]
+
+        # ── Leading ─────────────────────────────────────────────────────────
+        if lead_suit is None:
+            winners = [c for c in valid_cards if self._is_guaranteed_winner(c, play)]
+            if winners:
+                pick = max(winners, key=lambda c: self._card_value(c, play.operator))
+                return {"type": "play_card", "card": card_to_code(pick)}
+            pick = min(valid_cards, key=lambda c: self._card_value(c, play.operator))
+            return {"type": "play_card", "card": card_to_code(pick)}
+
+        # ── Following ──────────────────────────────────────────────────────
+        # Implemented in Task 6.
+        pick = min(valid_cards, key=lambda c: self._card_value(c, play.operator))
+        return {"type": "play_card", "card": card_to_code(pick)}
+
 
 def make_strategy(difficulty: str, position: str) -> AIStrategy:
     if difficulty == "easy":
