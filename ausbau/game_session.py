@@ -10,7 +10,11 @@ from Cards_refactored import (
     determine_trumpf, determine_trumpf_after_schieben, wiis, wiis_gleiche,
 )
 from utils.game_utils import check_game_end
-from ausbau.room import RECONNECT_GRACE_SECONDS, principal_id
+from ausbau.room import (
+    RECONNECT_GRACE_SECONDS,
+    REPLAY_BUFFER_TRICK_COUNT,
+    principal_id,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -177,6 +181,13 @@ class GameSession:
         self._game_task = None
         self._completed_tricks = []
         self._swap_requests = {}
+
+        # Live-trick tracking — used by `_room_resume_message_for` to
+        # rebuild a reconnecting seat's view. Wired from the phase loops
+        # in Task 18 (the new `_run_spiel`); for now they expose the
+        # attribute surface so reconnect tests can populate manually.
+        self._current_seat_turn = None         # Position whose turn it is, or None
+        self._current_trick_so_far = []        # list of {"position","card"} for in-progress trick
 
     def _seat(self, position: str):
         for s in self.seats:
@@ -369,23 +380,83 @@ class GameSession:
         seat.state_event.set()
 
     async def _reclaim_seat(self, position: str, websocket, principal) -> None:
-        """Stub — full implementation in Task 13."""
+        """Reclaim a seat for a returning human (spec §6.4).
+
+        Cancels any pending reconnect timer (so a previously-disconnected
+        seat that comes back inside the 60 s grace stays human), restores
+        the seat to a connected human state, sends a tailored
+        ``room_resume`` to the reclaimed WS, broadcasts ``seat_reclaimed``
+        to every other seat + spectator, and finally sets the seat's
+        ``state_event`` so any phase awaiter blocked on disconnect wakes.
+        """
         seat = self._seat(position)
-        seat.websocket = websocket
-        seat.is_ai = False
-        seat.principal = principal
-        # Cancel any pending reconnect timer
         task = self._reconnect_tasks.pop(position, None)
         if task is not None and not task.done():
             task.cancel()
+        seat.principal = principal
+        seat.is_ai = False
+        seat.websocket = websocket
+        seat.reconnect_deadline = None
+        seat.connected_since = time.monotonic()
+        await websocket.send_json(self._room_resume_message_for(position))
+        await self.broadcast(
+            {
+                "type": "seat_reclaimed",
+                "position": position,
+                "display_name": seat.display_name(),
+            },
+            except_seat=position,
+        )
+        seat.state_event.set()
 
     def _room_resume_message_for(self, position):
-        """Stub — full implementation in Task 15."""
+        """Build a tailored ``room_resume`` payload for a reconnect.
+
+        ``position is None`` → spectator mode (TV view): no hand, no turn.
+        Otherwise → seat reclaim: include the seat's own hand and a
+        ``your_turn`` flag derived from ``self._current_seat_turn``.
+
+        Common fields (sent to both spectators and seats): phase, scores,
+        operator (if a Spiel is in flight), variant block, in-progress
+        ``trick_so_far`` snapshot, last-N completed tricks
+        (``missed_tricks``), and ``current_seat_turn``.
+        """
+        is_spectator = position is None
+        your_hand = None
+        your_turn = None
+        if not is_spectator:
+            play = self.current_play
+            if play is not None:
+                hand = getattr(play, position, None)
+                your_hand = hand_to_codes(hand) if hand else []
+            else:
+                your_hand = []
+            your_turn = (self._current_seat_turn == position)
+
+        operator = (
+            self.current_play.operator
+            if self.current_play is not None
+            else None
+        )
+
         return {
             "type": "room_resume",
-            "phase": self.state,
             "your_position": position,
+            "your_hand": your_hand,
+            "phase": self.state,
             "scores": {"sn": self.point_sn, "ow": self.point_ow},
+            "operator": operator,
+            "variant": {
+                "trumpf_bock": self.variant.trumpf_bock,
+                "match_bonus": self.variant.match_bonus,
+                "stoeck": self.variant.stoeck,
+            },
+            "trick_so_far": list(self._current_trick_so_far),
+            "missed_tricks": list(
+                self._completed_tricks[-REPLAY_BUFFER_TRICK_COUNT:]
+            ),
+            "your_turn": your_turn,
+            "current_seat_turn": self._current_seat_turn,
         }
 
     def _initial_state(self, play: Play) -> dict:
