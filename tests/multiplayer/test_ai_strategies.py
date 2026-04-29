@@ -103,3 +103,61 @@ def test_medium_pick_card_follow_picks_lowest_point():
     msg = s.pick_card(play, lead_suit="Rosen", trick_so_far=[{"position": "compe", "card": "RA"}])
     expected = card_to_code(ai_select_card(play.compn, "Rosen", "Eicheln"))
     assert msg == {"type": "play_card", "card": expected}
+
+
+def test_hard_on_spiel_start_populates_remaining():
+    s = HardStrategy("comps")
+    play = Play(spiel=1)
+    s.on_spiel_start(play)
+    # 36 total cards - 9 own = 27 remaining
+    total = sum(len(v) for v in s._remaining_by_suit.values())
+    assert total == 27
+    # All 4 suits keys exist
+    assert set(s._remaining_by_suit.keys()) == set(SUITS)
+
+
+def test_hard_on_spiel_start_excludes_own_hand():
+    from ausbau.game_session import hand_to_codes
+    s = HardStrategy("comps")
+    play = Play(spiel=1)
+    s.on_spiel_start(play)
+    own = set(hand_to_codes(play.comps))
+    tracked = {c for codes in s._remaining_by_suit.values() for c in codes}
+    assert own.isdisjoint(tracked)
+
+
+def test_hard_on_card_played_removes_known_card():
+    s = HardStrategy("comps")
+    play = Play(spiel=1)
+    s.on_spiel_start(play)
+    # Pick any tracked card from any suit
+    suit, codes = next((k, v) for k, v in s._remaining_by_suit.items() if v)
+    code = next(iter(codes))
+    s.on_card_played("compo", code)
+    assert code not in s._remaining_by_suit[suit]
+
+
+def test_hard_on_card_played_skips_own_position():
+    s = HardStrategy("comps")
+    play = Play(spiel=1)
+    s.on_spiel_start(play)
+    initial_total = sum(len(v) for v in s._remaining_by_suit.values())
+    # Send a "self-play" — own cards aren't tracked anyway, so it's a no-op.
+    from ausbau.game_session import hand_to_codes
+    own_card = hand_to_codes(play.comps)[0]
+    s.on_card_played("comps", own_card)
+    after_total = sum(len(v) for v in s._remaining_by_suit.values())
+    assert initial_total == after_total
+
+
+def test_hard_on_card_played_unknown_card_is_noop():
+    s = HardStrategy("comps")
+    play = Play(spiel=1)
+    s.on_spiel_start(play)
+    initial_total = sum(len(v) for v in s._remaining_by_suit.values())
+    # Use a code we know is not tracked: pick a card from own hand
+    from ausbau.game_session import hand_to_codes
+    own_card = hand_to_codes(play.comps)[0]
+    s.on_card_played("compo", own_card)  # opponent "playing" something we have — defensive
+    after_total = sum(len(v) for v in s._remaining_by_suit.values())
+    assert initial_total == after_total  # no crash, no change

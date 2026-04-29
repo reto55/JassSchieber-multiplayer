@@ -13,6 +13,24 @@ from typing import Optional
 TRUMP_OPTIONS = ("Eicheln", "Rosen", "Schellen", "Schilten", "Oben", "Unten")
 
 
+# Inverse of game_session.SUIT_PREFIX. Two-letter prefixes (`SE`, `SI`)
+# come first in iteration so they're matched before single-letter `S`.
+INVERSE_SUIT_PREFIX = {
+    "SE": "Schellen",
+    "SI": "Schilten",
+    "E": "Eicheln",
+    "R": "Rosen",
+}
+
+
+def _split_code(code: str) -> tuple[str, str]:
+    """Return (suit_name, rank_suffix). 'SEK' → ('Schellen', 'K')."""
+    for prefix in ("SE", "SI", "E", "R"):
+        if code.startswith(prefix):
+            return INVERSE_SUIT_PREFIX[prefix], code[len(prefix):]
+    raise ValueError(f"bad card code: {code!r}")
+
+
 class AIStrategy:
     """Abstract base. Subclasses override pick_trump / pick_card.
 
@@ -78,6 +96,28 @@ class HardStrategy(AIStrategy):
     def __init__(self, position: str):
         super().__init__(position)
         self._remaining_by_suit: dict[str, set[str]] = {}
+
+    def on_spiel_start(self, play) -> None:
+        """Rebuild _remaining_by_suit from the deck minus own hand."""
+        from Cards_refactored import SUITS
+        from ausbau.game_session import SUIT_PREFIX, RANK_SUFFIX, hand_to_codes
+        self._remaining_by_suit = {suit: set() for suit in SUITS}
+        own = set(hand_to_codes(getattr(play, self.position)))
+        for suit in SUITS:
+            for rank in range(1, 10):
+                code = SUIT_PREFIX[suit] + RANK_SUFFIX[rank]
+                if code not in own:
+                    self._remaining_by_suit[suit].add(code)
+
+    def on_card_played(self, player_position: str, card_code: str) -> None:
+        """Remove a played card from tracking. No-op for own plays or unknowns."""
+        if player_position == self.position:
+            return
+        try:
+            suit, _ = _split_code(card_code)
+        except ValueError:
+            return
+        self._remaining_by_suit.get(suit, set()).discard(card_code)
 
 
 def make_strategy(difficulty: str, position: str) -> AIStrategy:
