@@ -434,6 +434,80 @@ async def start_room_endpoint(
 
 
 # ---------------------------------------------------------------------------
+# Mid-game seat-swap endpoint (Task 19, spec §4.3)
+# ---------------------------------------------------------------------------
+
+
+@app.post("/rooms/{code}/seat", status_code=200)
+async def seat_swap_endpoint(
+    code: str,
+    request: Request,
+    response: Response,
+    payload: Optional[dict] = Body(default={}),
+):
+    """Mid-game seat swap (spec §4.3).
+
+    Distinct from ``/rooms/{code}/join`` (which only seats people in
+    lobby). This endpoint runs once a game is in flight to swap two
+    connected human seats. Two-step protocol:
+
+      1. Requester calls with ``{to: <idx>}`` — server records pending
+         request and pushes ``seat_swap_request`` to the target.
+      2. Target calls with ``{to: <requester-idx>, accept: true}`` —
+         swap is armed for the next trick boundary.
+
+    Restrictions:
+      - State must be ``playing`` (409 otherwise).
+      - Caller must be a seated, connected human (403 otherwise).
+      - Target must be a seated, connected human (400 otherwise).
+      - Cannot target own seat (400).
+      - On accept, a matching pending request must exist (400).
+    """
+    from ausbau.room import get_room, principal_id
+
+    room = get_room(code)
+    if room is None:
+        raise HTTPException(404, "room not found")
+    if room.state != "playing":
+        raise HTTPException(409, f"seat swap only mid-game; state={room.state}")
+
+    principal = await _get_principal(request, response)
+    pid = principal_id(principal)
+    caller_seat = next(
+        (s for s in room.seats
+         if s.principal is not None and principal_id(s.principal) == pid),
+        None,
+    )
+    if caller_seat is None or caller_seat.is_ai or caller_seat.websocket is None:
+        raise HTTPException(403, "caller must be a seated, connected human")
+
+    body = payload or {}
+    to_idx = body.get("to")
+    if not isinstance(to_idx, int) or not (0 <= to_idx < 4):
+        raise HTTPException(400, "invalid 'to' index")
+    target = room.seats[to_idx]
+    if target is caller_seat:
+        raise HTTPException(400, "cannot swap with self")
+    if target.is_ai or target.websocket is None or target.principal is None:
+        raise HTTPException(400, "target seat must be a connected human")
+
+    accept = bool(body.get("accept", False))
+
+    if not accept:
+        await room._record_seat_swap_request(
+            caller_seat.position, target.position, caller_seat.display_name(),
+        )
+        return {"room_state": room.state}
+
+    # Accept path — caller is the acceptor; target is the original requester.
+    try:
+        await room._accept_seat_swap(caller_seat.position, target.position)
+    except KeyError as exc:
+        raise HTTPException(400, "no pending swap request") from exc
+    return {"room_state": room.state}
+
+
+# ---------------------------------------------------------------------------
 # WebSocket game endpoint
 # ---------------------------------------------------------------------------
 

@@ -13,6 +13,7 @@ from utils.game_utils import check_game_end
 from ausbau.room import (
     RECONNECT_GRACE_SECONDS,
     REPLAY_BUFFER_TRICK_COUNT,
+    SEAT_SWAP_REQUEST_TTL_SECONDS,
     principal_id,
 )
 
@@ -189,7 +190,14 @@ class GameSession:
         self._reconnect_tasks = {}
         self._game_task = None
         self._completed_tricks = []
+        # Pending mid-game seat-swap requests (Task 19, spec §4.3).
+        # Key: ``(from_position, to_position)``.
+        # Value: ``(expires_monotonic, asyncio.Task)`` — the task fires
+        # ``seat_swap_expired`` after ``SEAT_SWAP_REQUEST_TTL_SECONDS``.
         self._swap_requests = {}
+        # Armed swap awaiting commit at the next trick boundary. Set by
+        # ``_accept_seat_swap``; consumed by ``_commit_pending_swap``.
+        self._pending_swap = None
 
         # Live-trick tracking — used by `_room_resume_message_for` to
         # rebuild a reconnecting seat's view. Wired from the phase loops
@@ -423,6 +431,109 @@ class GameSession:
             except_seat=position,
         )
         seat.state_event.set()
+
+    async def _record_seat_swap_request(
+        self, from_pos: str, to_pos: str, from_display: str
+    ) -> None:
+        """Record a pending mid-game swap request (spec §4.3 step 2).
+
+        Cancels any existing request from the same ``from_pos`` (last
+        write wins per the restrictions clause). Schedules a TTL task
+        that fires ``seat_swap_expired`` to ``to_pos`` after
+        ``SEAT_SWAP_REQUEST_TTL_SECONDS``. Pushes ``seat_swap_request``
+        to ``to_pos``.
+        """
+        # Cancel any existing same-from request.
+        for key, (_old_expires, task) in list(self._swap_requests.items()):
+            if key[0] == from_pos:
+                if not task.done():
+                    task.cancel()
+                self._swap_requests.pop(key, None)
+
+        expires = time.monotonic() + SEAT_SWAP_REQUEST_TTL_SECONDS
+        task = asyncio.create_task(
+            self._seat_swap_timeout(from_pos, to_pos),
+            name=f"seat_swap_ttl:{self.code}:{from_pos}->{to_pos}",
+        )
+        self._swap_requests[(from_pos, to_pos)] = (expires, task)
+        await self.send_to_seat(to_pos, {
+            "type": "seat_swap_request",
+            "from_position": from_pos,
+            "from_display_name": from_display,
+        })
+
+    async def _seat_swap_timeout(self, from_pos: str, to_pos: str) -> None:
+        """TTL coroutine — fires ``seat_swap_expired`` if not accepted in time."""
+        try:
+            await asyncio.sleep(SEAT_SWAP_REQUEST_TTL_SECONDS)
+        except asyncio.CancelledError:
+            return
+        if (from_pos, to_pos) not in self._swap_requests:
+            return
+        self._swap_requests.pop((from_pos, to_pos), None)
+        await self.send_to_seat(to_pos, {
+            "type": "seat_swap_expired",
+            "from_position": from_pos,
+        })
+
+    async def _accept_seat_swap(self, accepter_pos: str, requester_pos: str) -> None:
+        """Mark the matching pending swap for commit at the next trick boundary.
+
+        ``accepter_pos`` is the seat answering the request; ``requester_pos``
+        is the seat that sent it. Raises ``KeyError`` if no matching
+        pending request exists (the endpoint translates this to HTTP 400).
+        """
+        key = (requester_pos, accepter_pos)
+        if key not in self._swap_requests:
+            raise KeyError(f"no pending swap request {key}")
+        _expires, task = self._swap_requests.pop(key)
+        if not task.done():
+            task.cancel()
+        self._pending_swap = (requester_pos, accepter_pos)
+
+    async def _commit_pending_swap(self) -> None:
+        """Atomically swap the two seats armed by ``_accept_seat_swap``.
+
+        Called from ``_play_trick`` at the trick boundary so the swap
+        never lands in the middle of a trick. Swaps:
+          - ``principal`` (User/Guest)
+          - ``websocket`` (live WS handle)
+          - ``connected_since`` timestamp
+          - ``incoming`` queue (so any WS reader-buffered messages stay
+            with the original sender, who is now sitting at the OTHER
+            seat — they belong to that human, not the seat itself)
+          - the per-Play hand attribute (``play.compo`` ↔ ``play.compn``)
+
+        Does NOT swap ``position`` (immutable on Seat) or ``is_ai``
+        (both seats are humans by precondition). Scores stay attached
+        to teams (NS/EW) and are not touched.
+        """
+        pair = self._pending_swap
+        if pair is None:
+            return
+        a, b = pair
+        self._pending_swap = None
+        seat_a = self._seat(a)
+        seat_b = self._seat(b)
+
+        seat_a.principal, seat_b.principal = seat_b.principal, seat_a.principal
+        seat_a.websocket, seat_b.websocket = seat_b.websocket, seat_a.websocket
+        seat_a.connected_since, seat_b.connected_since = (
+            seat_b.connected_since, seat_a.connected_since,
+        )
+        seat_a.incoming, seat_b.incoming = seat_b.incoming, seat_a.incoming
+
+        play = self.current_play
+        if play is not None:
+            ha = getattr(play, a)
+            hb = getattr(play, b)
+            setattr(play, a, hb)
+            setattr(play, b, ha)
+
+        await self.broadcast({
+            "type": "seat_swap_committed",
+            "swaps": [[a, b], [b, a]],
+        })
 
     def _room_resume_message_for(self, position):
         """Build a tailored ``room_resume`` payload for a reconnect.
@@ -1061,6 +1172,11 @@ class GameSession:
         })
         if len(self._completed_tricks) > REPLAY_BUFFER_TRICK_COUNT:
             del self._completed_tricks[:-REPLAY_BUFFER_TRICK_COUNT]
+
+        # Mid-game seat-swap commit point (Task 19, spec §4.3 step 4):
+        # any swap armed by `_accept_seat_swap` lands here so it never
+        # interleaves with an in-flight trick.
+        await self._commit_pending_swap()
 
         return winner, pts
 
