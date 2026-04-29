@@ -3,12 +3,14 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import asyncio
 import logging
+import time
 from typing import Optional
 from Cards_refactored import (
     Play, SUITS, PLAY_MODES, Card,
     determine_trumpf, determine_trumpf_after_schieben, wiis, wiis_gleiche,
 )
 from utils.game_utils import check_game_end
+from ausbau.room import RECONNECT_GRACE_SECONDS
 
 logger = logging.getLogger(__name__)
 
@@ -285,9 +287,87 @@ class GameSession:
                 self.spectators.remove(spec)
 
     async def _disconnect_seat(self, position: str) -> None:
-        """Stub — full implementation in Task 14."""
+        """Drop a seat's connection.
+
+        - Idempotent for AI / already-disconnected seats (early return).
+        - In ``lobby``: seat drops to AI immediately (no grace), broadcasts
+          ``seat_changed`` with ``reason="disconnect"``. If the
+          disconnecting seat was the host, transfer host.
+        - Mid-game: schedule a 60s reconnect grace via
+          ``_reconnect_timeout``, broadcast ``seat_paused`` with the
+          countdown, and wake any phase awaiter via ``state_event.set()``.
+        """
+        from ausbau.room import principal_id
         seat = self._seat(position)
+        if seat.is_ai or seat.websocket is None:
+            return
+        try:
+            await seat.websocket.close()
+        except Exception:
+            pass
         seat.websocket = None
+        seat.connected_since = None
+
+        if self.state == "lobby":
+            # No grace in lobby; drop seat to AI immediately.
+            was_host = (
+                seat.principal is not None
+                and principal_id(seat.principal) == self.host_principal_id
+            )
+            seat.principal = None
+            seat.is_ai = True
+            seat.reconnect_deadline = None
+            await self.broadcast({
+                "type": "seat_changed",
+                "seat": self._seat_to_dict(seat),
+                "reason": "disconnect",
+            })
+            if was_host:
+                await self._transfer_host()
+            return
+
+        # Mid-game: 60s grace window.
+        seat.reconnect_deadline = time.monotonic() + RECONNECT_GRACE_SECONDS
+        await self.broadcast({
+            "type": "seat_paused",
+            "position": position,
+            "reconnect_deadline_secs": RECONNECT_GRACE_SECONDS,
+            "display_name": seat.display_name(),
+        })
+        self._reconnect_tasks[position] = asyncio.create_task(
+            self._reconnect_timeout(position)
+        )
+        seat.state_event.set()  # wake any phase awaiter
+
+    async def _reconnect_timeout(self, position: str) -> None:
+        """Fires ``RECONNECT_GRACE_SECONDS`` after a mid-game disconnect.
+
+        If the seat reclaimed in time (``websocket`` is not None) this is
+        a no-op: the reclaiming code path is responsible for cancelling
+        the timer task. Otherwise, flip the seat to AI but KEEP
+        ``seat.principal`` so the original human can still reclaim by
+        reconnecting later. If the timed-out seat was host, transfer
+        host (per spec §8.2).
+        """
+        try:
+            await asyncio.sleep(RECONNECT_GRACE_SECONDS)
+        except asyncio.CancelledError:
+            return
+        seat = self._seat(position)
+        if seat.websocket is not None:
+            return  # raced; reclaimed before timeout
+        from ausbau.room import principal_id
+        was_host = (
+            seat.principal is not None
+            and principal_id(seat.principal) == self.host_principal_id
+        )
+        seat.is_ai = True
+        seat.reconnect_deadline = None
+        self._reconnect_tasks.pop(position, None)
+        await self.broadcast({"type": "seat_ai_takeover", "position": position})
+        if was_host:
+            await self._transfer_host()
+        seat.state_event.set()
 
     async def _reclaim_seat(self, position: str, websocket, principal) -> None:
         """Stub — full implementation in Task 13."""
