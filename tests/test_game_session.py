@@ -281,12 +281,12 @@ def _drive_single_trick(session, play, human_card_code):
     ws.receive_json = AsyncMock(return_value={"type": "play_card", "card": human_card_code})
     # skip the AI think-pause so tests run instantly
     with patch('ausbau.game_session.asyncio.sleep', new=AsyncMock()):
-        result = asyncio.run(session._play_trick(ws, play))
+        result = asyncio.run(session._play_trick_legacy(ws, play))
     return ws, result
 
 
 def test_play_trick_returns_winner_and_points():
-    """_play_trick must return (winner_key, points_int) so _run_spiel can emit `points`."""
+    """_play_trick_legacy must return (winner_key, points_int) so _run_spiel can emit `points`."""
     session = GameSession()
     play = Play(4)  # comps leads
     human_card = hand_to_codes(play.comps)[0]
@@ -323,7 +323,7 @@ def test_run_spiel_trick_end_includes_points_key():
 
     with patch.object(GameSession, '_trump_phase_legacy', _noop_trump), \
          patch.object(GameSession, '_weis_phase_legacy', _noop_weis), \
-         patch.object(GameSession, '_play_trick', _fake_play_trick), \
+         patch.object(GameSession, '_play_trick_legacy', _fake_play_trick), \
          patch('ausbau.game_session.asyncio.sleep', new=AsyncMock()):
         asyncio.run(session._run_spiel(ws, 4))
 
@@ -381,7 +381,7 @@ def _drive_run_spiel_and_collect(session_scores):
 
     with patch.object(GameSession, '_trump_phase_legacy', _noop_trump), \
          patch.object(GameSession, '_weis_phase_legacy', _noop_weis), \
-         patch.object(GameSession, '_play_trick', _fake_play_trick), \
+         patch.object(GameSession, '_play_trick_legacy', _fake_play_trick), \
          patch('ausbau.game_session.asyncio.sleep', new=AsyncMock()):
         asyncio.run(session._run_spiel(ws, 4))
 
@@ -847,7 +847,7 @@ def test_play_trick_rejects_wrong_type_then_accepts_valid():
         {"type": "play_card", "card": human_card},        # valid
     ])
     with patch('ausbau.game_session.asyncio.sleep', new=AsyncMock()):
-        asyncio.run(session._play_trick(ws, play))
+        asyncio.run(session._play_trick_legacy(ws, play))
 
     sent = [c[0][0] for c in ws.send_json.call_args_list]
     # Must contain at least: your_turn, error, your_turn, card_played(for human)
@@ -880,7 +880,7 @@ def test_play_trick_rejects_missing_card_key_then_accepts_valid():
         {"type": "play_card", "card": human_card},        # valid
     ])
     with patch('ausbau.game_session.asyncio.sleep', new=AsyncMock()):
-        asyncio.run(session._play_trick(ws, play))
+        asyncio.run(session._play_trick_legacy(ws, play))
 
     sent = [c[0][0] for c in ws.send_json.call_args_list]
     types = [m['type'] for m in sent]
@@ -901,7 +901,7 @@ def test_play_trick_non_string_card_rejected():
         {"type": "play_card", "card": human_card},        # valid
     ])
     with patch('ausbau.game_session.asyncio.sleep', new=AsyncMock()):
-        asyncio.run(session._play_trick(ws, play))
+        asyncio.run(session._play_trick_legacy(ws, play))
 
     sent = [c[0][0] for c in ws.send_json.call_args_list]
     types = [m['type'] for m in sent]

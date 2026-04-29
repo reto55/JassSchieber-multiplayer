@@ -417,9 +417,17 @@ class GameSession:
         return await seat.incoming.get()
 
     def _compute_ai_action(self, seat, valid_actions: dict) -> dict:
-        """Stub — Task 13 fills with real logic."""
-        if valid_actions.get("type") == "trump":
+        """Crude AI stub — Task 13 swaps in real strategy.
+
+        ``trump`` → always picks Eicheln. ``play_card`` → first valid
+        card from ``valid_cards`` (no strategic ranking yet)."""
+        action_type = valid_actions.get("type")
+        if action_type == "trump":
             return {"type": "choose_trump", "operator": "Eicheln"}
+        if action_type == "play_card":
+            valid = valid_actions.get("valid_cards") or []
+            if valid:
+                return {"type": "play_card", "card": valid[0]}
         return {"type": "noop"}
 
     async def _trump_phase_legacy(self, websocket, play: Play) -> None:
@@ -684,8 +692,145 @@ class GameSession:
             "scores": {"sn": self.point_sn, "ow": self.point_ow},
         })
 
-    async def _play_trick(self, websocket, play: Play) -> tuple:
-        """Play one trick.
+    async def _play_trick(self, play: Play) -> tuple:
+        """Multi-seat trick loop (Task 12).
+
+        Drives one trick across all four seats:
+
+          - The active seat receives ``play_request`` with their own
+            ``valid_cards`` and the cumulative ``trick_so_far``.
+          - Other seats + spectators receive ``play_pending`` with the
+            same ``trick_so_far`` snapshot and ``by_position`` set to
+            the active seat.
+          - Each completed play is broadcast as ``card_played``.
+          - At trick close, ``trick_end`` is broadcast with
+            ``{winner_position, winner_team, points}`` per the
+            ``schieber-protocol`` skill (multi-seat shape — no running
+            totals; those go in ``spiel_end`` / ``game_end``).
+
+        Validation invariants mirror the trump / weis phases: malformed
+        ``play_card`` messages trigger an ``error`` reply followed by a
+        fresh ``play_request`` on the SAME seat. Only a valid
+        ``play_card`` whose ``card`` resolves to a card in the seat's
+        own valid-cards list breaks the per-seat loop.
+
+        AI seats route through ``_compute_ai_action`` (synchronous —
+        no artificial delay; tests run zero-latency).
+
+        Returns ``(winner_position, trick_points)``.
+        """
+        trick: dict = {}
+        lead_suit: Optional[str] = None
+        player = play.first
+        trick_order: list[dict] = []  # cumulative [{"position", "card"}, ...]
+
+        for i in range(4):
+            hand = getattr(play, player)
+            valid = get_valid_cards(hand, lead_suit, play.operator)
+
+            request_payload = {
+                "type": "play_request",
+                "trick_so_far": list(trick_order),
+                "lead_suit": lead_suit,
+                "valid_cards": valid,
+            }
+
+            await self.send_to_seat(player, request_payload)
+            await self.broadcast({
+                "type": "play_pending",
+                "by_position": player,
+                "trick_so_far": list(trick_order),
+            }, except_seat=player)
+
+            # Per-seat receive loop with re-prompt on malformed input.
+            while True:
+                msg = await self._await_seat_action(player, valid_actions={
+                    "type": "play_card",
+                    "lead_suit": lead_suit,
+                    "operator": play.operator,
+                    "valid_cards": valid,
+                })
+
+                if not isinstance(msg, dict):
+                    await self.send_to_seat(player, {
+                        "type": "error",
+                        "message": (
+                            f"Erwartet: 'play_card', erhalten: {msg!r}."
+                        ),
+                    })
+                    await self.send_to_seat(player, request_payload)
+                    continue
+                mtype = msg.get("type")
+                if mtype != "play_card":
+                    await self.send_to_seat(player, {
+                        "type": "error",
+                        "message": (
+                            f"Erwartet: 'play_card', erhalten: {mtype!r}."
+                        ),
+                    })
+                    await self.send_to_seat(player, request_payload)
+                    continue
+                code = msg.get("card")
+                if not isinstance(code, str):
+                    await self.send_to_seat(player, {
+                        "type": "error",
+                        "message": (
+                            "Ungültige Karte: 'card' fehlt oder ist kein String."
+                        ),
+                    })
+                    await self.send_to_seat(player, request_payload)
+                    continue
+                if code not in valid:
+                    await self.send_to_seat(player, {
+                        "type": "error",
+                        "message": f"Ungültige Karte: {code!r}.",
+                    })
+                    await self.send_to_seat(player, request_payload)
+                    continue
+                found, suit = find_card_in_hand(code, hand)
+                if found is None:
+                    await self.send_to_seat(player, {
+                        "type": "error",
+                        "message": f"Karte nicht im Blatt: {code}.",
+                    })
+                    await self.send_to_seat(player, request_payload)
+                    continue
+                hand[suit].remove(found)
+                card = found
+                break
+
+            if i == 0:
+                lead_suit = card.suit
+            trick[player] = card
+            trick_order.append({"position": player, "card": card_to_code(card)})
+
+            await self.broadcast({
+                "type": "card_played",
+                "by_position": player,
+                "card": card_to_code(card),
+            })
+            player = play.folger[player]
+
+        winner = determine_trick_winner(trick, play.first, play.operator, play.folger)
+        pts = trick_points(trick, play.operator)
+        if winner in SN_PLAYERS:
+            self.point_sn += pts
+            winner_team = "sn"
+        else:
+            self.point_ow += pts
+            winner_team = "ow"
+
+        await self.broadcast({
+            "type": "trick_end",
+            "winner_position": winner,
+            "winner_team": winner_team,
+            "points": pts,
+        })
+
+        return winner, pts
+
+    async def _play_trick_legacy(self, websocket, play: Play) -> tuple:
+        """Legacy single-WS trick loop.
 
         Returns a ``(winner_key, trick_points)`` tuple:
           * ``winner_key`` — internal player key of the trick winner.
@@ -781,7 +926,7 @@ class GameSession:
         await self._weis_phase_legacy(websocket, play)
 
         for trick_num in range(9):
-            winner, trick_pts = await self._play_trick(websocket, play)
+            winner, trick_pts = await self._play_trick_legacy(websocket, play)
             is_last = trick_num == 8
             if is_last:
                 if winner in SN_PLAYERS:
