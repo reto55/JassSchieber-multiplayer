@@ -215,7 +215,7 @@ def test_trump_phase_human_leads_chooses():
 
     ws = AsyncMock()
     ws.receive_json = AsyncMock(return_value={"type": "choose_trump", "suit": "Eicheln"})
-    asyncio.run(session._trump_phase(ws, play))
+    asyncio.run(session._trump_phase_legacy(ws, play))
 
     assert play.operator == "Eicheln"
     calls = [c[0][0] for c in ws.send_json.call_args_list]
@@ -231,7 +231,7 @@ def test_trump_phase_human_leads_schiebt():
     play = Play(4)
     ws = AsyncMock()
     ws.receive_json = AsyncMock(return_value={"type": "schieben"})
-    asyncio.run(session._trump_phase(ws, play))
+    asyncio.run(session._trump_phase_legacy(ws, play))
 
     assert play.operator in ['Eicheln', 'Rosen', 'Schellen', 'Schilten', 'Oben', 'Unten']
     assert play.starter == 'compn'
@@ -321,7 +321,7 @@ def test_run_spiel_trick_end_includes_points_key():
     async def _fake_play_trick(self, websocket, play):
         return ('comps', next(fake_trick_values))
 
-    with patch.object(GameSession, '_trump_phase', _noop_trump), \
+    with patch.object(GameSession, '_trump_phase_legacy', _noop_trump), \
          patch.object(GameSession, '_weis_phase', _noop_weis), \
          patch.object(GameSession, '_play_trick', _fake_play_trick), \
          patch('ausbau.game_session.asyncio.sleep', new=AsyncMock()):
@@ -379,7 +379,7 @@ def _drive_run_spiel_and_collect(session_scores):
             self.point_ow = ow
         return ('comps', 0)
 
-    with patch.object(GameSession, '_trump_phase', _noop_trump), \
+    with patch.object(GameSession, '_trump_phase_legacy', _noop_trump), \
          patch.object(GameSession, '_weis_phase', _noop_weis), \
          patch.object(GameSession, '_play_trick', _fake_play_trick), \
          patch('ausbau.game_session.asyncio.sleep', new=AsyncMock()):
@@ -663,7 +663,7 @@ def test_trump_phase_rejects_invalid_type_then_accepts_choose_trump():
         {"type": "play_card", "card": "EA", "suit": "Schellen"},
         {"type": "choose_trump", "suit": "Eicheln"},
     ])
-    asyncio.run(session._trump_phase(ws, play))
+    asyncio.run(session._trump_phase_legacy(ws, play))
 
     # operator must reflect the VALID message, not the injected bogus suit.
     assert play.operator == "Eicheln"
@@ -695,7 +695,7 @@ def test_trump_phase_rejects_schieben_when_disallowed():
         {"type": "schieben"},  # not allowed: can_schieben was False
         {"type": "choose_trump", "suit": "Rosen"},
     ])
-    asyncio.run(session._trump_phase(ws, play))
+    asyncio.run(session._trump_phase_legacy(ws, play))
 
     assert play.operator == "Rosen"
     assert play.starter == 'comps'
@@ -721,7 +721,7 @@ def test_trump_phase_rejects_invalid_type_in_post_schieben_branch():
         {"type": "play_card", "card": "EA"},  # wrong type
         {"type": "choose_trump", "suit": "Schilten"},
     ])
-    asyncio.run(session._trump_phase(ws, play))
+    asyncio.run(session._trump_phase_legacy(ws, play))
 
     assert play.operator == "Schilten"
     sent = [c[0][0] for c in ws.send_json.call_args_list]
@@ -742,7 +742,7 @@ def test_trump_phase_loops_on_repeated_invalid_input():
         {"type": "garbage"},
         {"type": "choose_trump", "suit": "Rosen"},
     ])
-    asyncio.run(session._trump_phase(ws, play))
+    asyncio.run(session._trump_phase_legacy(ws, play))
 
     assert play.operator == "Rosen"
     sent = [c[0][0] for c in ws.send_json.call_args_list]
@@ -760,7 +760,7 @@ def test_trump_phase_schieben_still_works_when_allowed():
 
     ws = AsyncMock()
     ws.receive_json = AsyncMock(return_value={"type": "schieben"})
-    asyncio.run(session._trump_phase(ws, play))
+    asyncio.run(session._trump_phase_legacy(ws, play))
 
     assert play.starter == 'compn'  # partner takes over after schieben
     # operator set by AI partner via determine_trumpf_after_schieben()

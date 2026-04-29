@@ -326,7 +326,84 @@ class GameSession:
             "target": self.end_game,
         }
 
-    async def _trump_phase(self, websocket, play: Play) -> None:
+    async def _trump_phase(self, play: Play) -> None:
+        """Multi-seat trump selection.
+
+        The seat whose turn it is to choose receives `trump_request`.
+        Other seats + spectators receive `trump_pending`.
+        Final choice is broadcast as `trump_chosen`.
+        """
+        lead_position = self._first_player_position(play)
+        target_position = lead_position
+
+        await self.send_to_seat(target_position, {
+            "type": "trump_request",
+            "schieben_allowed": True,
+        })
+        await self.broadcast({
+            "type": "trump_pending",
+            "by_position": target_position,
+        }, except_seat=target_position)
+
+        msg = await self._await_seat_action(target_position, valid_actions={
+            "type": "trump",
+            "options": ["Eicheln", "Rosen", "Schellen", "Schilten", "Oben", "Unten"],
+            "schieben_allowed": True,
+        })
+
+        if msg.get("type") == "schieben":
+            target_position = self._partner_of(target_position)
+            await self.send_to_seat(target_position, {
+                "type": "trump_request",
+                "schieben_allowed": False,
+            })
+            await self.broadcast({
+                "type": "trump_pending",
+                "by_position": target_position,
+            }, except_seat=target_position)
+            msg = await self._await_seat_action(target_position, valid_actions={
+                "type": "trump",
+                "options": ["Eicheln", "Rosen", "Schellen", "Schilten", "Oben", "Unten"],
+                "schieben_allowed": False,
+            })
+
+        operator = msg.get("operator")
+        if operator not in ("Eicheln", "Rosen", "Schellen", "Schilten", "Oben", "Unten"):
+            await self.send_to_seat(target_position, {
+                "type": "error",
+                "message": f"invalid trump: {operator}",
+            })
+            return await self._trump_phase(play)  # retry
+
+        play.operator = operator
+        await self.broadcast({
+            "type": "trump_chosen",
+            "by_position": target_position,
+            "operator": operator,
+        })
+
+    def _first_player_position(self, play) -> str:
+        return play.first
+
+    def _partner_of(self, position: str) -> str:
+        partners = {"compo": "compe", "compe": "compo",
+                    "compn": "comps", "comps": "compn"}
+        return partners[position]
+
+    async def _await_seat_action(self, position: str, valid_actions: dict) -> dict:
+        """Stub — full implementation in Task 13. Reads from seat's incoming queue."""
+        seat = self._seat(position)
+        if seat.is_ai:
+            return self._compute_ai_action(seat, valid_actions)
+        return await seat.incoming.get()
+
+    def _compute_ai_action(self, seat, valid_actions: dict) -> dict:
+        """Stub — Task 13 fills with real logic."""
+        if valid_actions.get("type") == "trump":
+            return {"type": "choose_trump", "operator": "Eicheln"}
+        return {"type": "noop"}
+
+    async def _trump_phase_legacy(self, websocket, play: Play) -> None:
         """Handle trump selection. Asks human if they are the lead or if AI schiebs to them.
 
         Per the schieber-protocol skill invariant §5 ("No silent failures…
@@ -542,7 +619,7 @@ class GameSession:
         """Deal, trump, weis, then 9 tricks for one Spiel."""
         play = Play(spiel_num)
         await websocket.send_json(self._initial_state(play))
-        await self._trump_phase(websocket, play)
+        await self._trump_phase_legacy(websocket, play)
         await self._weis_phase(websocket, play)
 
         for trick_num in range(9):
