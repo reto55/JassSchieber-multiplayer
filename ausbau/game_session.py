@@ -1211,8 +1211,186 @@ class GameSession:
                     ow += 20
         return (sn, ow)
 
-    async def _run_spiel(self, websocket, spiel_num: int) -> None:
-        """Deal, trump, weis, then 9 tricks for one Spiel."""
+    def _game_start_for(self, position) -> dict:
+        """Build a per-seat ``game_start`` payload (Task 18).
+
+        ``position is None`` → spectator (TV) mode: every seat listed
+        without ``is_partner``, no hand. Otherwise → seat view: own hand
+        in ``your_hand`` and the other three seats listed with an
+        ``is_partner`` flag relative to ``position``.
+        """
+        play = self.current_play
+        is_spec = position is None
+
+        variant_block = {
+            "trumpf_bock": self.variant.trumpf_bock,
+            "match_bonus": self.variant.match_bonus,
+            "stoeck": self.variant.stoeck,
+        }
+
+        if is_spec:
+            players = [
+                {
+                    "position": p,
+                    "display_name": self._seat(p).display_name(),
+                    "card_count": 9,
+                }
+                for p in PLAYERS
+            ]
+            return {
+                "type": "game_start",
+                "your_position": None,
+                "your_hand": None,
+                "first_player": play.first,
+                "players": players,
+                "scores": {"sn": self.point_sn, "ow": self.point_ow},
+                "target": self.end_game,
+                "variant": variant_block,
+            }
+
+        your_hand = hand_to_codes(getattr(play, position))
+        partner = self._partner_of(position)
+        others = [p for p in PLAYERS if p != position]
+        players = [
+            {
+                "position": p,
+                "display_name": self._seat(p).display_name(),
+                "card_count": 9,
+                "is_partner": (p == partner),
+            }
+            for p in others
+        ]
+        return {
+            "type": "game_start",
+            "your_position": position,
+            "your_hand": your_hand,
+            "first_player": play.first,
+            "players": players,
+            "scores": {"sn": self.point_sn, "ow": self.point_ow},
+            "target": self.end_game,
+            "variant": variant_block,
+        }
+
+    async def _run_spiel(self, spiel_num: int) -> None:
+        """Multi-seat: deal, trump, weis, then 9 tricks for one Spiel.
+
+        Drives the full per-spiel state machine without a websocket
+        argument — all I/O routes through ``send_to_seat`` /
+        ``broadcast`` / ``broadcast_per_seat``. Sequence:
+
+          1. Build a fresh ``Play`` and broadcast per-seat ``game_start``.
+          2. Run ``_trump_phase`` (chooser → trump_chosen).
+          3. Apply Stöck (variant-gated, trump-mode only).
+          4. Run ``_weis_phase`` (per-seat declarations + resolution).
+          5. Loop 9 tricks via ``_play_trick``; the winner of each trick
+             leads the next. The 9th trick gets the last-trick +5 bonus.
+          6. Apply match bonus (variant-gated).
+          7. Broadcast ``spiel_end`` with the round's deltas.
+
+        Resets the per-spiel trick-winner log up front so the match-bonus
+        helper only sees this spiel's winners.
+        """
+        play = Play(spiel_num)
+        self.current_play = play
+        self._reset_spiel_trick_winners()
+
+        # 1. game_start — per-seat redaction.
+        def _factory(seat):
+            return self._game_start_for(seat.position if seat is not None else None)
+        await self.broadcast_per_seat(_factory)
+
+        # 2. trump
+        self._current_seat_turn = play.first
+        self._current_trick_so_far = []
+        await self._trump_phase(play)
+
+        # 3. stoeck (variant-gated, trump-mode only)
+        sn_st, ow_st = self._apply_stoeck(play)
+        self.point_sn += sn_st
+        self.point_ow += ow_st
+        if sn_st and not ow_st:
+            stoeck_team = "sn"
+        elif ow_st and not sn_st:
+            stoeck_team = "ow"
+        elif sn_st and ow_st:
+            stoeck_team = "both"
+        else:
+            stoeck_team = None
+
+        # 4. weis (mutates point_sn / point_ow internally)
+        sn_before_weis = self.point_sn
+        ow_before_weis = self.point_ow
+        await self._weis_phase(play)
+        weis_added_sn = self.point_sn - sn_before_weis
+        weis_added_ow = self.point_ow - ow_before_weis
+
+        # 5. nine tricks
+        for trick_num in range(9):
+            self._current_seat_turn = play.first
+            self._current_trick_so_far = []
+            winner, _trick_pts = await self._play_trick(play)
+            if trick_num == 8:
+                # last-trick +5 bonus (rule, unaffected by variants)
+                if winner in SN_PLAYERS:
+                    self.point_sn += 5
+                else:
+                    self.point_ow += 5
+            play.first = winner
+
+        # 6. match bonus (variant-gated)
+        sn_match, ow_match = self._apply_match_bonus()
+        self.point_sn += sn_match
+        self.point_ow += ow_match
+        match_made = bool(sn_match or ow_match)
+
+        # 7. spiel_end broadcast
+        await self.broadcast({
+            "type": "spiel_end",
+            "scores": {"sn": self.point_sn, "ow": self.point_ow},
+            "weis_added": {"sn": weis_added_sn, "ow": weis_added_ow},
+            "match": match_made,
+            "stoeck_team": stoeck_team,
+        })
+
+        # Clear live-trick state.
+        self._current_seat_turn = None
+        self._current_trick_so_far = []
+        self.current_play = None
+
+    async def start_game(self) -> None:
+        """Game-loop entry point for the background task.
+
+        Cycles through Spiele (1→2→3→4→1…) calling ``_run_spiel``
+        until ``check_game_end`` fires. On termination broadcasts
+        ``game_end`` with the winning team token (``sn`` / ``ow`` /
+        ``tie``) and final scores per the schieber-protocol skill.
+        """
+        self.state = "playing"
+        spiel_num = 0
+        while True:
+            spiel_num = (spiel_num % 4) + 1
+            await self._run_spiel(spiel_num)
+            if check_game_end(self.point_sn, self.point_ow, self.end_game):
+                if self.point_sn > self.point_ow:
+                    game_winner = "sn"
+                elif self.point_ow > self.point_sn:
+                    game_winner = "ow"
+                else:
+                    game_winner = "tie"
+                self.state = "finished"
+                await self.broadcast({
+                    "type": "game_end",
+                    "winner_team": game_winner,
+                    "scores": {"sn": self.point_sn, "ow": self.point_ow},
+                })
+                return
+            await asyncio.sleep(2)  # pause between Spiele
+
+    async def _run_spiel_legacy(self, websocket, spiel_num: int) -> None:
+        """Legacy single-WS spiel loop (pre-multiplayer). Kept until the
+        old ``/ws`` path is fully deleted; multi-seat callers use
+        ``_run_spiel``.
+        """
         play = Play(spiel_num)
         await websocket.send_json(self._initial_state(play))
         await self._trump_phase_legacy(websocket, play)
@@ -1254,7 +1432,12 @@ class GameSession:
         })
 
     async def run(self, websocket) -> None:
-        """Main loop: cycles through 4 Spiele per round until end_game score is reached."""
+        """Legacy single-WS main loop. Cycles 4 Spiele until end_game.
+
+        Multi-seat callers spawn ``start_game`` as a background task via
+        ``POST /rooms/{code}/start`` (Task 18). This path is retained
+        for the legacy ``/ws`` endpoint and its tests.
+        """
         name = (
             getattr(self.principal, "display_name", None)
             or getattr(self.principal, "username", None)
@@ -1264,7 +1447,7 @@ class GameSession:
         spiel_num = 0
         while True:
             spiel_num = (spiel_num % 4) + 1
-            await self._run_spiel(websocket, spiel_num)
+            await self._run_spiel_legacy(websocket, spiel_num)
             if check_game_end(self.point_sn, self.point_ow, self.end_game):
                 if self.point_sn > self.point_ow:
                     game_winner = "sn"

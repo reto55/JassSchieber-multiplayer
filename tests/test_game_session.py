@@ -325,7 +325,7 @@ def test_run_spiel_trick_end_includes_points_key():
          patch.object(GameSession, '_weis_phase_legacy', _noop_weis), \
          patch.object(GameSession, '_play_trick_legacy', _fake_play_trick), \
          patch('ausbau.game_session.asyncio.sleep', new=AsyncMock()):
-        asyncio.run(session._run_spiel(ws, 4))
+        asyncio.run(session._run_spiel_legacy(ws, 4))
 
     sent = [c[0][0] for c in ws.send_json.call_args_list]
     trick_ends = [m for m in sent if m.get('type') == 'trick_end']
@@ -383,7 +383,7 @@ def _drive_run_spiel_and_collect(session_scores):
          patch.object(GameSession, '_weis_phase_legacy', _noop_weis), \
          patch.object(GameSession, '_play_trick_legacy', _fake_play_trick), \
          patch('ausbau.game_session.asyncio.sleep', new=AsyncMock()):
-        asyncio.run(session._run_spiel(ws, 4))
+        asyncio.run(session._run_spiel_legacy(ws, 4))
 
     return [c[0][0] for c in ws.send_json.call_args_list]
 
@@ -619,7 +619,7 @@ def test_game_end_winner_team_is_normalized_token():
     async def _fake_spiel(self, websocket, spiel_num):
         return
 
-    with patch.object(GameSession, '_run_spiel', _fake_spiel):
+    with patch.object(GameSession, '_run_spiel_legacy', _fake_spiel):
         asyncio.run(session.run(ws))
 
     sent = [c[0][0] for c in ws.send_json.call_args_list]
@@ -640,7 +640,7 @@ def test_game_end_winner_team_tie():
     async def _fake_spiel(self, websocket, spiel_num):
         return
 
-    with patch.object(GameSession, '_run_spiel', _fake_spiel):
+    with patch.object(GameSession, '_run_spiel_legacy', _fake_spiel):
         asyncio.run(session.run(ws))
 
     sent = [c[0][0] for c in ws.send_json.call_args_list]
@@ -793,7 +793,7 @@ def test_run_cycles_four_spiele_and_ends():
         seen.append(spiel_num)
         self.point_sn += 300
 
-    with patch.object(GameSession, '_run_spiel', _fake_run_spiel), \
+    with patch.object(GameSession, '_run_spiel_legacy', _fake_run_spiel), \
          patch('ausbau.game_session.asyncio.sleep', new=AsyncMock()):
         asyncio.run(session.run(ws))
 
@@ -820,7 +820,7 @@ def test_run_cycles_wrap_after_fourth_spiel():
         # 100 points per Spiel → need 10 Spiele to cross end_game.
         self.point_sn += 100
 
-    with patch.object(GameSession, '_run_spiel', _fake_run_spiel), \
+    with patch.object(GameSession, '_run_spiel_legacy', _fake_run_spiel), \
          patch('ausbau.game_session.asyncio.sleep', new=AsyncMock()):
         asyncio.run(session.run(ws))
 

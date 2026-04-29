@@ -392,6 +392,48 @@ async def leave_spectator_endpoint(
 
 
 # ---------------------------------------------------------------------------
+# Game start endpoint
+# ---------------------------------------------------------------------------
+
+@app.post("/rooms/{code}/start", status_code=204)
+async def start_room_endpoint(
+    code: str,
+    request: Request,
+    response: Response,
+):
+    """Host-only: lock seats and kick off the game-loop background task.
+
+    - 404 if room does not exist.
+    - 403 if caller is not the room host.
+    - 409 if room is not in lobby state.
+    Otherwise spawns ``GameSession.start_game`` as a background task,
+    flips ``room.state`` to ``"playing"`` (the loop also sets this on
+    entry), and returns 204.
+    """
+    import asyncio as _asyncio
+    from ausbau.room import get_room, principal_id
+
+    room = get_room(code)
+    if room is None:
+        raise HTTPException(404, "room not found")
+    principal = await _get_principal(request, response)
+    if principal_id(principal) != room.host_principal_id:
+        raise HTTPException(403, "not host")
+    if room.state != "lobby":
+        raise HTTPException(409, f"room state is {room.state}")
+
+    # Flip state synchronously so a fast follow-up GET sees "playing"
+    # even before the loop's first await yields. start_game() also sets
+    # this idempotently on entry.
+    room.state = "playing"
+    room._game_task = _asyncio.create_task(
+        room.start_game(),
+        name=f"game_loop:{room.code}",
+    )
+    return Response(status_code=204)
+
+
+# ---------------------------------------------------------------------------
 # WebSocket game endpoint
 # ---------------------------------------------------------------------------
 
