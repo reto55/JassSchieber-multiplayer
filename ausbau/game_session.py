@@ -10,7 +10,7 @@ from Cards_refactored import (
     determine_trumpf, determine_trumpf_after_schieben, wiis, wiis_gleiche,
 )
 from utils.game_utils import check_game_end
-from ausbau.room import RECONNECT_GRACE_SECONDS
+from ausbau.room import RECONNECT_GRACE_SECONDS, principal_id
 
 logger = logging.getLogger(__name__)
 
@@ -297,7 +297,6 @@ class GameSession:
           ``_reconnect_timeout``, broadcast ``seat_paused`` with the
           countdown, and wake any phase awaiter via ``state_event.set()``.
         """
-        from ausbau.room import principal_id
         seat = self._seat(position)
         if seat.is_ai or seat.websocket is None:
             return
@@ -335,7 +334,8 @@ class GameSession:
             "display_name": seat.display_name(),
         })
         self._reconnect_tasks[position] = asyncio.create_task(
-            self._reconnect_timeout(position)
+            self._reconnect_timeout(position),
+            name=f"reconnect_timeout:{self.code}:{position}",
         )
         seat.state_event.set()  # wake any phase awaiter
 
@@ -356,7 +356,6 @@ class GameSession:
         seat = self._seat(position)
         if seat.websocket is not None:
             return  # raced; reclaimed before timeout
-        from ausbau.room import principal_id
         was_host = (
             seat.principal is not None
             and principal_id(seat.principal) == self.host_principal_id
