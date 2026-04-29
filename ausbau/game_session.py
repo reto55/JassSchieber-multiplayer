@@ -1026,6 +1026,21 @@ class GameSession:
             "points": pts,
         })
 
+        # Append to replay buffer (Task 16). Each entry is a fully-redacted
+        # snapshot — `by` is the per-seat play list in trick order, plus the
+        # winner and points. Cap to the most recent N entries (drop oldest)
+        # so reconnecting seats only ever replay the spec-sized window.
+        self._completed_tricks.append({
+            "by": [
+                f"{entry['position']}:{entry['card']}"
+                for entry in trick_order
+            ],
+            "winner_position": winner,
+            "points": pts,
+        })
+        if len(self._completed_tricks) > REPLAY_BUFFER_TRICK_COUNT:
+            del self._completed_tricks[:-REPLAY_BUFFER_TRICK_COUNT]
+
         return winner, pts
 
     async def _play_trick_legacy(self, websocket, play: Play) -> tuple:
