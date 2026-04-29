@@ -215,9 +215,108 @@ class HardStrategy(AIStrategy):
             return {"type": "play_card", "card": card_to_code(pick)}
 
         # ── Following ──────────────────────────────────────────────────────
-        # Implemented in Task 6.
-        pick = min(valid_cards, key=lambda c: self._card_value(c, play.operator))
+        from Cards_refactored import SUITS
+        operator = play.operator
+
+        # Determine current trick winner.
+        played = trick_so_far  # [{position, card}, ...] — at most 3
+        winner_position = self._winner_so_far(played, operator)
+        partner_position = play.partner.get(self.position)
+        partner_winning = (winner_position == partner_position)
+
+        # Sum points already on the table.
+        from ausbau.game_session import find_card_in_hand, card_to_code
+        from Cards_refactored import create_card
+        from ausbau.game_session import RANK_SUFFIX
+        inverse_rank = {v: k for k, v in RANK_SUFFIX.items()}
+
+        def _code_to_card(code):
+            from ausbau.ai_strategies import _split_code
+            suit, rank_suffix = _split_code(code)
+            return create_card(inverse_rank[rank_suffix], suit)
+
+        trick_total = sum(
+            self._card_value(_code_to_card(p["card"]), operator) for p in played
+        )
+
+        # Stable "lowest" key: point value first, then rank — so that when
+        # two cards tie on point value (e.g. Sechs and Neun off-suit, both 0)
+        # the truly lower-ranked one is dumped.
+        low_key = lambda c: (self._card_value(c, operator), c.rank)
+
+        if partner_winning:
+            # Dump lowest valid card.
+            pick = min(valid_cards, key=low_key)
+            return {"type": "play_card", "card": card_to_code(pick)}
+
+        # Opponent winning. Try to beat cheaply.
+        winning_card = _code_to_card(
+            next(p["card"] for p in played if p["position"] == winner_position)
+        )
+        winning_strength = self._strength(winning_card, operator, lead_suit)
+
+        beaters = [c for c in valid_cards
+                   if self._strength(c, operator, lead_suit) > winning_strength]
+        if beaters:
+            cheapest = min(beaters, key=low_key)
+            # Cheap take threshold: cheap enough vs. trick value.
+            if self._card_value(cheapest, operator) <= trick_total + 5:
+                # Trump conservation overlay — see below before returning.
+                pick = cheapest
+            else:
+                pick = min(valid_cards, key=low_key)
+        else:
+            pick = min(valid_cards, key=low_key)
+
+        # Trump-conservation overlay: don't burn trump on a cheap trick when
+        # we have a non-trump alternative.
+        if (
+            operator in SUITS
+            and pick.suit == operator
+            and lead_suit != operator
+            and trick_total < 18
+        ):
+            non_trump_alts = [c for c in valid_cards if c.suit != operator]
+            if non_trump_alts:
+                pick = min(non_trump_alts, key=low_key)
+
+        # High-value trump steal: if trick is rich and we can trump in.
+        if (
+            operator in SUITS
+            and lead_suit != operator
+            and trick_total >= 18
+            and not partner_winning
+        ):
+            trump_cards = [c for c in valid_cards if c.suit == operator]
+            if trump_cards:
+                pick = min(trump_cards, key=low_key)
+
         return {"type": "play_card", "card": card_to_code(pick)}
+
+    def _winner_so_far(self, played: list, operator: str) -> Optional[str]:
+        """Return position of the current trick winner among `played`. None if empty."""
+        if not played:
+            return None
+        from Cards_refactored import create_card
+        from ausbau.game_session import RANK_SUFFIX
+        from ausbau.ai_strategies import _split_code
+        inverse_rank = {v: k for k, v in RANK_SUFFIX.items()}
+
+        def _to_card(code):
+            suit, rank_suffix = _split_code(code)
+            return create_card(inverse_rank[rank_suffix], suit)
+
+        lead_card = _to_card(played[0]["card"])
+        lead_suit = lead_card.suit
+        winner = played[0]["position"]
+        best = self._strength(lead_card, operator, lead_suit)
+        for entry in played[1:]:
+            c = _to_card(entry["card"])
+            s = self._strength(c, operator, lead_suit)
+            if s > best:
+                best = s
+                winner = entry["position"]
+        return winner
 
 
 def make_strategy(difficulty: str, position: str) -> AIStrategy:

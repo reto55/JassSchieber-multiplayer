@@ -263,3 +263,92 @@ def test_hard_pick_card_lead_no_winner_plays_lowest():
     # All cards are 0 points (Sechs); pick is deterministic but we just
     # assert it returned a 0-point card from the hand.
     assert msg["card"] in {"R6","R7","E6","E7","SE6","SE7","SI6","SI7","SI8"}
+
+
+def test_hard_follow_partner_winning_dumps_low():
+    """Partner has played the leading card. Dump low; do NOT trump in."""
+    s = HardStrategy("comps")
+    play = Play(spiel=1)
+    play.operator = "Eicheln"
+    # comps's partner is compn (per Cards_refactored partner mapping)
+    _hand_with_suits(play, "comps", {
+        "Rosen": ["A", "9", "6"],
+        "Eicheln": ["U", "7"],
+        "Schellen": [],
+        "Schilten": ["O", "B"],
+    })
+    s.on_spiel_start(play)
+    # Partner (compn) led RA — they're winning.
+    msg = s.pick_card(play, lead_suit="Rosen",
+                      trick_so_far=[{"position": "compn", "card": "RA"}])
+    # Should follow with lowest Rosen (R6, 0 points).
+    assert msg == {"type": "play_card", "card": "R6"}
+
+
+def test_hard_follow_opponent_winning_beats_cheaply():
+    """Opponent is leading; we beat with the cheapest valid card that wins."""
+    s = HardStrategy("comps")
+    play = Play(spiel=1)
+    play.operator = "Eicheln"
+    _hand_with_suits(play, "comps", {
+        "Rosen": ["A", "K", "9"],
+        "Eicheln": ["7"],
+        "Schellen": [],
+        "Schilten": ["6"],
+    })
+    s.on_spiel_start(play)
+    # Opponent (compe) led R8.
+    msg = s.pick_card(play, lead_suit="Rosen",
+                      trick_so_far=[{"position": "compe", "card": "R8"}])
+    # Cheapest beat is R9 (0 points, beats R8 rank).
+    assert msg == {"type": "play_card", "card": "R9"}
+
+
+def test_hard_follow_no_lead_suit_dumps_low_when_cant_beat():
+    """Can't follow lead suit, can't trump cheaply; dump lowest non-trump."""
+    s = HardStrategy("comps")
+    play = Play(spiel=1)
+    play.operator = "Eicheln"
+    # comps has no Rosen; trump is Eicheln.
+    _hand_with_suits(play, "comps", {
+        "Rosen": [],
+        "Eicheln": ["U", "8"],   # trump
+        "Schellen": ["6"],
+        "Schilten": ["7"],
+    })
+    s.on_spiel_start(play)
+    # Opponent led RA; current trick total = 11 (one Ass).
+    msg = s.pick_card(play, lead_suit="Rosen",
+                      trick_so_far=[{"position": "compe", "card": "RA"}])
+    # Trick total < 18, so DON'T trump. Dump lowest non-trump (SE6, 0 pts).
+    assert msg["card"] in ("SE6", "SI7")  # both are 0 pts; pick is deterministic
+    assert msg["type"] == "play_card"
+
+
+def test_hard_trump_steal_when_trick_high_value():
+    """Trick already has 18+ points; we have trump; steal it."""
+    s = HardStrategy("comps")
+    play = Play(spiel=1)
+    play.operator = "Eicheln"
+    _hand_with_suits(play, "comps", {
+        "Rosen": [],
+        "Eicheln": ["6"],   # one trump
+        "Schellen": ["7"],
+        "Schilten": ["8"],
+    })
+    s.on_spiel_start(play)
+    # Trick: opponent led Ass (11) + partner played Ober... no wait, partner's a teammate.
+    # Two opponents played: compe RA (11) + compo R K (4) + we're 4th to play?
+    # Partner is compn for comps. So compe + compo are opponents.
+    # Trick so far: RA (11) + RK (4) + compn (partner) RB (8 for Banner) = 23 pts.
+    # The compn at index 2 is partner. Even though partner played, total >=18
+    # and trump conservation overlay should apply only when partner is winning.
+    # Partner played RB (rank 5, lower than A) so opponent compe (RA) wins the trick.
+    msg = s.pick_card(play, lead_suit="Rosen",
+                      trick_so_far=[
+                          {"position": "compe", "card": "RA"},
+                          {"position": "compn", "card": "RB"},
+                          {"position": "compo", "card": "RK"},
+                      ])
+    # Opponent winning, trick total ~23 ≥ 18, no Rosen in hand → trump in with E6.
+    assert msg == {"type": "play_card", "card": "E6"}
