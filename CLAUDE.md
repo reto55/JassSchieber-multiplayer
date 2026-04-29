@@ -40,18 +40,20 @@ utils/
   game_utils.py                  ← Scoring, winner logic, game duration
   db_utils.py                    ← SQLite CRUD operations
 ausbau/
-  server.py                      ← FastAPI app; /ws WebSocket endpoint
-  game_session.py                ← GameSession (live game state machine for one WS connection)
-  html5/                         ← game.html + js + css + Jasskarten.png sprite sheet
+  server.py                      ← FastAPI app; /ws/{code} WebSocket endpoint, /rooms/* HTTP
+  room.py                        ← Room registry, Seat/Spectator/Variant data, reaper task
+  game_session.py                ← GameSession (multi-seat state machine + game-loop)
+  html5/                         ← game.html, lobby.html, js + css + Jasskarten.png sprite sheet
   database_manager.py            ← OOP DatabaseManager with context manager
   db_adapter.py                  ← Compatibility shim for legacy DB code
   db_migration.py                ← Data migration tool
 tests/                           ← Unit and integration tests
-docs/superpowers/plans/          ← HTML5 frontend plan (15 tasks, done)
+  multiplayer/                   ← Multi-WS / room / lobby / variant / e2e tests
+docs/superpowers/plans/          ← HTML5 frontend plan (done), accounts plan (done), multiplayer Part 1+2 (done)
 .claude/{agents,skills}/         ← Schieber build harness (see "Harness: Schieber")
 ```
 
-The live game path is HTML5: browser ↔ `ausbau/server.py /ws` ↔ `GameSession.run` ↔ `Play` / `Cards_refactored.py`. No CLI.
+The live game path is HTML5: browser ↔ `ausbau/server.py /ws/{code}` ↔ `GameSession.start_game` → `_run_spiel` → `_trump_phase` / `_weis_phase` / `_play_trick` ↔ `Play` / `Cards_refactored.py`. No CLI.
 
 ## Key Design Decisions
 
@@ -67,6 +69,8 @@ The live game path is HTML5: browser ↔ `ausbau/server.py /ws` ↔ `GameSession
 
 **Trick-winner logic** lives in `ausbau/game_session.py::determine_trick_winner` — the live HTML5 path. Rules codified in the `schieber-game-rules` skill.
 
+**Multiplayer model**: each room is one `GameSession` keyed by 6-char code in `ausbau/room.py::ROOMS`. Per-seat state on `Seat` (principal, websocket, is_ai, reconnect_deadline, connected_since, per-seat `incoming` queue, `state_event`). Mid-game, the four phase loops (`_trump_phase`, `_weis_phase`, `_play_trick`) await per-seat input via `_await_seat_action(position, valid_actions)`. AI seats compute synchronously through `_compute_ai_action` (`farbe_lang` for trump, `ai_select_card` for play). Disconnect triggers a 60s reconnect timer; on timeout, seat flips to AI but `principal` is retained so the original human can reclaim. Replay buffer (`_completed_tricks`, capped at 3) feeds `room_resume.missed_tricks` for reconnecting clients. Per-room reaper removes finished/idle rooms after 5 min.
+
 ## Database Schema
 
 SQLite database (`schieber.db`) with tables: `schieber` (sessions), `game`, `play` (individual turns), `spieler` (players), `stich` (tricks), `wys`/`wwys` (special scoring).
@@ -81,6 +85,9 @@ SQLite database (`schieber.db`) with tables: `schieber` (sessions), `game`, `pla
 - Test suite in `tests/`
 - `GameState` singleton removed (E2), `max_game` readability pass (E1), naming standardisation (E3), live-path error handling (E4), legacy CLI (`play.py`, `deal_cards_refactored.py`, `GAME_FLOW_README.md`) deleted (E5).
 - **Sub-project B — User accounts** (this branch). Spec: `docs/superpowers/specs/2026-04-28-schieber-accounts-design.md`. Plan: `docs/superpowers/plans/2026-04-28-schieber-accounts.md`. New package `frontend/auth/` provides email-and-password signup/login, soft email verification, password reset, change-email/password, account delete (soft, with 30-day tombstone) and export, admin tools (bootstrap-by-env, ban/unban/promote/demote/force-verify, audit log), per-IP rate limiting (slowapi), and signed guest cookies for anonymous play. WS handshake reads cookies and resolves to `User` or `Guest` principal, used for log labelling. Auth tables live in their own `auth.db` (async SQLAlchemy + aiosqlite); game tables stay raw `sqlite3`. Server entry: `python -m uvicorn ausbau.server:app --reload --port 8765` (env vars per `.env.example`).
+- **Sub-project A — Networked multiplayer** (this branch). Spec: `docs/superpowers/specs/2026-04-28-schieber-multiplayer-design.md`. Plans: `docs/superpowers/plans/2026-04-28-schieber-multiplayer.md` (Part 1: Tasks 0–6) + `2026-04-28-schieber-multiplayer-part2.md` (Part 2: Tasks 7–25). New module `ausbau/room.py` adds the room registry (`ROOMS`), `Seat`, `Spectator`, `Variant`, code generation, and the reaper. `GameSession` is now multi-seat: `_trump_phase`, `_weis_phase`, `_play_trick` send per-seat redacted prompts (`trump_request`, `weis_request`, `play_request` to the active seat only) and broadcast `*_pending` / `*_chosen` / `card_played` / `trick_end` to others. Disconnect → 60s grace → AI takeover (principal retained for reclaim). Replay buffer (last 3 tricks) feeds `room_resume`. Variants `trumpf_bock` (5x trump trick), `match_bonus` (+100 for 9-of-9), `stoeck` (+20 K+O of trump). HTTP surface: `POST /rooms`, `GET /rooms/{code}`, `GET /rooms/mine`, `POST /rooms/{code}/{join,leave,spectate,leave-spectator,start,seat}`. WS at `/ws/{code}`. Lobby UI at `/lobby?code=…`. Host-only: start, kick (lobby-only). Mid-game seat swap via two-step accept, commit at trick boundary, 30s TTL.
+
+**Remaining sub-project:** sub-project C — AI difficulty (per spec §12.6 linkage; `Seat.is_ai` already routes through `ai_select_action` hook).
 
 ## Harness: Schieber
 
