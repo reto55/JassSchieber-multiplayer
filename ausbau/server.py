@@ -638,7 +638,33 @@ async def websocket_endpoint(websocket: WebSocket, code: str):
                 except Exception:
                     break
     except WebSocketDisconnect:
+        # Clean client-drop — socket already gone, route through standard cleanup.
         if seat is not None:
             await room._disconnect_seat(seat.position)
         elif spec is not None and spec in room.spectators:
             room.spectators.remove(spec)
+    except Exception as exc:
+        # Per schieber-protocol skill invariant §5 ("No silent failures; server
+        # responds with `error` …"), an unexpected backend exception must not
+        # close the socket without a final protocol-shaped error payload.
+        # Restored from sub-project B's E4.2 hardening, which dropped during the
+        # multi-WS refactor in Task 9.
+        import sys as _sys
+        from ausbau.room import principal_id as _pid
+        print(f"[ws error] code={code} principal={_pid(principal)!r} {exc!r}",
+              file=_sys.stderr)
+        try:
+            await websocket.send_json({
+                "type": "error",
+                "message": "Interner Serverfehler. Bitte neu laden.",
+            })
+        except Exception:
+            pass
+        if seat is not None:
+            await room._disconnect_seat(seat.position)
+        elif spec is not None and spec in room.spectators:
+            room.spectators.remove(spec)
+        try:
+            await websocket.close(code=1011, reason="internal error")
+        except Exception:
+            pass
