@@ -119,6 +119,38 @@ class HardStrategy(AIStrategy):
             return
         self._remaining_by_suit.get(suit, set()).discard(card_code)
 
+    def pick_trump(self, play, schieben_allowed: bool) -> dict:
+        from Cards_refactored import SUITS
+        hand = getattr(play, self.position)
+
+        # 1. Find longest trump-candidate suit (with farbe_lang tie-break).
+        priority = ["Schilten", "Schellen", "Eicheln", "Rosen"]
+        best_suit = max(priority, key=lambda s: (len(hand[s]),
+                                                  -priority.index(s)))
+        ranks_in_best = {c.__class__.__name__ for c in hand[best_suit]}
+
+        # 2. Commit when the best suit is decent.
+        if len(hand[best_suit]) >= 4 and (
+            "Under" in ranks_in_best or "Neun" in ranks_in_best
+        ):
+            return {"type": "choose_trump", "operator": best_suit}
+
+        # 3. Schieben if allowed.
+        if schieben_allowed:
+            return {"type": "schieben"}
+
+        # 4. Forced commit: score all 6 modes, pick max.
+        scores: dict[str, int] = {}
+        for suit in SUITS:
+            scores[suit] = sum(c.wtrumpf for c in hand[suit])
+        scores["Oben"] = sum(c.woben for s in SUITS for c in hand[s])
+        scores["Unten"] = sum(c.wunten for s in SUITS for c in hand[s])
+
+        # Tie-break: priority order over trump suits, then Oben, then Unten.
+        ordered = priority + ["Oben", "Unten"]
+        best_op = max(ordered, key=lambda op: (scores[op], -ordered.index(op)))
+        return {"type": "choose_trump", "operator": best_op}
+
 
 def make_strategy(difficulty: str, position: str) -> AIStrategy:
     if difficulty == "easy":

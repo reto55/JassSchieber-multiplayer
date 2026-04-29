@@ -161,3 +161,68 @@ def test_hard_on_card_played_unknown_card_is_noop():
     s.on_card_played("compo", own_card)  # opponent "playing" something we have — defensive
     after_total = sum(len(v) for v in s._remaining_by_suit.values())
     assert initial_total == after_total  # no crash, no change
+
+
+def _hand_with_suits(play, position, suit_to_codes):
+    """Helper: stuff Play's per-position hand with specific cards by suit."""
+    from Cards_refactored import CARD_ATTRIBUTES, SUITS, create_card
+    from ausbau.game_session import RANK_SUFFIX
+    inverse_rank = {v: k for k, v in RANK_SUFFIX.items()}
+    hand = {s: [] for s in SUITS}
+    for suit, codes in suit_to_codes.items():
+        for code_suffix in codes:
+            rank = inverse_rank[code_suffix]
+            hand[suit].append(create_card(rank, suit))
+    setattr(play, position, hand)
+
+
+def test_hard_pick_trump_commits_when_long_with_under():
+    # 4-card Schilten hand including Under → should commit Schilten.
+    s = HardStrategy("comps")
+    play = Play(spiel=1)
+    _hand_with_suits(play, "comps", {"Schilten": ["A", "K", "U", "9"]})
+    msg = s.pick_trump(play, schieben_allowed=True)
+    assert msg == {"type": "choose_trump", "operator": "Schilten"}
+
+
+def test_hard_pick_trump_schiebens_when_weak_and_allowed():
+    # 3-card best suit → schieben.
+    s = HardStrategy("comps")
+    play = Play(spiel=1)
+    _hand_with_suits(play, "comps", {
+        "Eicheln": ["A", "K", "9"],
+        "Rosen": ["8", "7"],
+        "Schellen": ["6", "U"],
+        "Schilten": ["O", "B"],
+    })
+    msg = s.pick_trump(play, schieben_allowed=True)
+    assert msg == {"type": "schieben"}
+
+
+def test_hard_pick_trump_falls_back_to_max_score_post_schieben():
+    # Post-schieben: same weak hand, but schieben_allowed=False forces commit.
+    # With four Asses-and-Kings, Oben should score highest.
+    s = HardStrategy("comps")
+    play = Play(spiel=1)
+    _hand_with_suits(play, "comps", {
+        "Eicheln": ["A", "K"],
+        "Rosen": ["A", "K"],
+        "Schellen": ["A", "K"],
+        "Schilten": ["A"],   # 9 cards total
+    })
+    msg = s.pick_trump(play, schieben_allowed=False)
+    assert msg["type"] == "choose_trump"
+    # All Asses + Kings dominates Oben (4×11 + 4×4 = 60 over 9 cards).
+    assert msg["operator"] == "Oben"
+
+
+def test_hard_pick_trump_long_no_under_no_neun_schiebens():
+    # 5 cards but no Under or Neun → schieben.
+    s = HardStrategy("comps")
+    play = Play(spiel=1)
+    _hand_with_suits(play, "comps", {
+        "Eicheln": ["A", "K", "O", "B", "8"],
+        "Rosen": ["A", "K", "O", "7"],
+    })
+    msg = s.pick_trump(play, schieben_allowed=True)
+    assert msg == {"type": "schieben"}
