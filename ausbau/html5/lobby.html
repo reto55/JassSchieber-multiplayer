@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Schieber Room</title>
+  <link rel="stylesheet" href="/static/css/lobby.css">
+</head>
+<body>
+  <header>
+    <h1>Schieber Room</h1>
+    <div class="room-code">Code: <span id="room-code"></span></div>
+    <div id="who"></div>
+  </header>
+  <main>
+    <div id="error" role="alert"></div>
+
+    <section class="seats">
+      <h2>Seats</h2>
+      <ul id="seats"></ul>
+    </section>
+
+    <section class="actions">
+      <button id="btn-join" type="button">Join</button>
+      <button id="btn-leave" type="button" hidden>Leave</button>
+      <button id="btn-spectate" type="button">Spectate</button>
+      <button id="btn-stop-spectate" type="button" hidden>Stop Spectating</button>
+      <button id="btn-start" type="button" hidden>Start Game</button>
+    </section>
+
+    <section class="variant">
+      <h3>Variant</h3>
+      <ul id="variant-list"></ul>
+    </section>
+
+    <section class="spectators">
+      <span id="spectator-count">0</span> spectators
+    </section>
+
+    <section class="state-info">
+      State: <span id="state-value">…</span>
+    </section>
+  </main>
+  <script src="/static/js/lobby.js"></script>
+</body>
+</html>

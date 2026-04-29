@@ -77,6 +77,12 @@ def index():
     return FileResponse(os.path.join(_HTML5, "game.html"))
 
 
+@app.get("/lobby")
+def lobby_page():
+    """Static lobby page for a room. The page reads ?code=… via JS."""
+    return FileResponse(os.path.join(_HTML5, "lobby.html"))
+
+
 # ---------------------------------------------------------------------------
 # Auth sub-app wiring
 # ---------------------------------------------------------------------------
