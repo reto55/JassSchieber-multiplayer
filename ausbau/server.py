@@ -2,6 +2,7 @@
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+import asyncio
 import secrets
 from datetime import datetime, timezone
 from fastapi import FastAPI, Request, Response, WebSocket, WebSocketDisconnect, HTTPException, Body
@@ -410,7 +411,6 @@ async def start_room_endpoint(
     flips ``room.state`` to ``"playing"`` (the loop also sets this on
     entry), and returns 204.
     """
-    import asyncio as _asyncio
     from ausbau.room import get_room, principal_id
 
     room = get_room(code)
@@ -426,7 +426,7 @@ async def start_room_endpoint(
     # even before the loop's first await yields. start_game() also sets
     # this idempotently on entry.
     room.state = "playing"
-    room._game_task = _asyncio.create_task(
+    room._game_task = asyncio.create_task(
         room.start_game(),
         name=f"game_loop:{room.code}",
     )
