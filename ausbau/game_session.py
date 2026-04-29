@@ -19,6 +19,7 @@ POSITION_NAMES = {'comps': 'Süd', 'compn': 'Nord', 'compo': 'Ost', 'compe': 'We
 SN_PLAYERS = {'comps', 'compn'}
 OW_PLAYERS = {'compo', 'compe'}
 PLAYERS = ['comps', 'compo', 'compn', 'compe']
+TRUMP_OPTIONS = ("Eicheln", "Rosen", "Schellen", "Schilten", "Oben", "Unten")
 
 
 def card_to_code(card: Card) -> str:
@@ -331,11 +332,14 @@ class GameSession:
 
         The seat whose turn it is to choose receives `trump_request`.
         Other seats + spectators receive `trump_pending`.
+        On invalid input the same seat is re-prompted (state preserved:
+        if a `schieben` already happened, schieben_allowed stays False).
         Final choice is broadcast as `trump_chosen`.
         """
-        lead_position = self._first_player_position(play)
-        target_position = lead_position
+        target_position = play.first
+        schieben_used = False
 
+        # Initial prompt for the lead.
         await self.send_to_seat(target_position, {
             "type": "trump_request",
             "schieben_allowed": True,
@@ -345,45 +349,60 @@ class GameSession:
             "by_position": target_position,
         }, except_seat=target_position)
 
-        msg = await self._await_seat_action(target_position, valid_actions={
-            "type": "trump",
-            "options": ["Eicheln", "Rosen", "Schellen", "Schilten", "Oben", "Unten"],
-            "schieben_allowed": True,
-        })
-
-        if msg.get("type") == "schieben":
-            target_position = self._partner_of(target_position)
-            await self.send_to_seat(target_position, {
-                "type": "trump_request",
-                "schieben_allowed": False,
-            })
-            await self.broadcast({
-                "type": "trump_pending",
-                "by_position": target_position,
-            }, except_seat=target_position)
+        while True:
+            schieben_allowed = not schieben_used
             msg = await self._await_seat_action(target_position, valid_actions={
                 "type": "trump",
-                "options": ["Eicheln", "Rosen", "Schellen", "Schilten", "Oben", "Unten"],
-                "schieben_allowed": False,
+                "options": list(TRUMP_OPTIONS),
+                "schieben_allowed": schieben_allowed,
             })
 
-        operator = msg.get("operator")
-        if operator not in ("Eicheln", "Rosen", "Schellen", "Schilten", "Oben", "Unten"):
-            await self.send_to_seat(target_position, {
-                "type": "error",
-                "message": f"invalid trump: {operator}",
+            mtype = msg.get("type") if isinstance(msg, dict) else None
+
+            if mtype == "schieben" and schieben_allowed:
+                schieben_used = True
+                target_position = self._partner_of(target_position)
+                await self.send_to_seat(target_position, {
+                    "type": "trump_request",
+                    "schieben_allowed": False,
+                })
+                await self.broadcast({
+                    "type": "trump_pending",
+                    "by_position": target_position,
+                }, except_seat=target_position)
+                continue
+
+            if mtype != "choose_trump":
+                await self.send_to_seat(target_position, {
+                    "type": "error",
+                    "message": f"invalid action: {mtype!r}",
+                })
+                # Re-prompt the same seat with current schieben state.
+                await self.send_to_seat(target_position, {
+                    "type": "trump_request",
+                    "schieben_allowed": schieben_allowed,
+                })
+                continue
+
+            operator = msg.get("operator") if isinstance(msg, dict) else None
+            if operator not in TRUMP_OPTIONS:
+                await self.send_to_seat(target_position, {
+                    "type": "error",
+                    "message": f"invalid trump: {operator}",
+                })
+                await self.send_to_seat(target_position, {
+                    "type": "trump_request",
+                    "schieben_allowed": schieben_allowed,
+                })
+                continue
+
+            play.operator = operator
+            await self.broadcast({
+                "type": "trump_chosen",
+                "by_position": target_position,
+                "operator": operator,
             })
-            return await self._trump_phase(play)  # retry
-
-        play.operator = operator
-        await self.broadcast({
-            "type": "trump_chosen",
-            "by_position": target_position,
-            "operator": operator,
-        })
-
-    def _first_player_position(self, play) -> str:
-        return play.first
+            return
 
     def _partner_of(self, position: str) -> str:
         partners = {"compo": "compe", "compe": "compo",

@@ -3,6 +3,7 @@ import pytest
 import pytest_asyncio
 
 from ausbau.room import ROOMS
+from frontend.auth.guest import Guest
 
 
 @pytest.fixture(autouse=True)
@@ -54,6 +55,22 @@ class FakeWebSocket:
 @pytest.fixture
 def fake_ws():
     return FakeWebSocket()
+
+
+def seat_4_humans(s) -> dict[str, "FakeWebSocket"]:
+    """Seat all four positions of `s` with distinct guest principals + FakeWebSockets.
+
+    Returns a dict mapping position → FakeWebSocket so tests can inspect each
+    seat's message stream. Used by trump-phase / weis-phase / play-trick tests
+    that need a fully-populated room.
+    """
+    wss: dict[str, FakeWebSocket] = {}
+    for i, seat in enumerate(s.seats):
+        seat.principal = Guest(guest_id=str(i) * 32)
+        seat.is_ai = False
+        seat.websocket = FakeWebSocket()
+        wss[seat.position] = seat.websocket
+    return wss
 
 
 @pytest.fixture
