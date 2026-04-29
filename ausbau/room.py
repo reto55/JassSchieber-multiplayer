@@ -52,6 +52,8 @@ class Seat:
     connected_since: Optional[float] = None
     incoming: asyncio.Queue = field(default_factory=asyncio.Queue)
     state_event: asyncio.Event = field(default_factory=asyncio.Event)
+    ai_difficulty: str = "medium"              # one of: easy / medium / hard
+    _strategy: Optional[object] = None         # AIStrategy | None; built on demand
 
     def display_name(self) -> str:
         if self.is_ai or self.principal is None:
@@ -83,6 +85,7 @@ def make_code() -> str:
 def create_room(*, host, variant: Variant):
     """Create a room and register it. Host claims seat 0; seats 1-3 default to AI."""
     from ausbau.game_session import GameSession
+    from ausbau.ai_strategies import make_strategy
     code = make_code()
     session = GameSession(
         code=code,
@@ -91,6 +94,10 @@ def create_room(*, host, variant: Variant):
     )
     session.seats[0].principal = host
     session.seats[0].is_ai = False
+    # Auto-AI seats 1-3 with default-medium strategy.
+    for i in (1, 2, 3):
+        seat = session.seats[i]
+        seat._strategy = make_strategy(seat.ai_difficulty, seat.position)
     ROOMS[code] = session
     return session
 
