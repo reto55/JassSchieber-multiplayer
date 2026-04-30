@@ -71,3 +71,25 @@ def test_remove_room():
     code = session.code
     remove_room(code)
     assert get_room(code) is None
+
+
+def test_seat_default_ai_difficulty_medium():
+    from ausbau.room import Seat
+    s = Seat(position="compo")
+    assert s.ai_difficulty == "medium"
+    assert s._strategy is None  # Seat dataclass alone doesn't auto-build
+
+
+def test_create_room_assigns_medium_strategy_to_ai_seats():
+    from ausbau.room import create_room, Variant
+    from ausbau.ai_strategies import MediumStrategy
+    from frontend.auth.guest import Guest
+    g = Guest(guest_id="a" * 32)
+    room = create_room(host=g, variant=Variant())
+    # Host seat is human → no strategy
+    assert room.seats[0]._strategy is None
+    # Other 3 are AI with MediumStrategy
+    for i in (1, 2, 3):
+        assert isinstance(room.seats[i]._strategy, MediumStrategy)
+        assert room.seats[i].ai_difficulty == "medium"
+        assert room.seats[i]._strategy.position == room.seats[i].position

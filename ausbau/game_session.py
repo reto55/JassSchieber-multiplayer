@@ -252,6 +252,7 @@ class GameSession:
             "principal_id": (
                 principal_id(seat.principal) if seat.principal is not None else None
             ),
+            "ai_difficulty": seat.ai_difficulty if seat.is_ai else None,
         }
 
     def _seated_human_count(self) -> int:
@@ -437,6 +438,10 @@ class GameSession:
         )
         seat.is_ai = True
         seat.reconnect_deadline = None
+        # Sub-project C: reset AI difficulty on takeover (spec §5 step 5).
+        seat.ai_difficulty = "medium"
+        from ausbau.ai_strategies import make_strategy
+        seat._strategy = make_strategy("medium", position)
         self._reconnect_tasks.pop(position, None)
         await self.broadcast({"type": "seat_ai_takeover", "position": position})
         if was_host:
@@ -758,6 +763,7 @@ class GameSession:
                 # ignore it. The phase still owns validation of the reply.
                 # `getattr(..., None)` keeps `FakePlay` test doubles working.
                 "hand": getattr(play, target_position, None),
+                "play": play,
             })
 
             mtype = msg.get("type") if isinstance(msg, dict) else None
@@ -840,39 +846,28 @@ class GameSession:
             return msg
 
     def _compute_ai_action(self, seat, valid_actions: dict) -> dict:
-        """Compute a synchronous AI action from a phase prompt.
+        """Delegate to the seat's strategy. Defensive rebuild if missing."""
+        if seat._strategy is None:
+            from ausbau.ai_strategies import make_strategy
+            import logging
+            logging.warning(
+                "AI seat %s had no strategy; defensive rebuild as %s",
+                seat.position, seat.ai_difficulty,
+            )
+            seat._strategy = make_strategy(seat.ai_difficulty or "medium", seat.position)
 
-        ``trump`` → use ``utils.card_utils.farbe_lang`` over the seat's
-        hand (passed in via ``valid_actions["hand"]``) to pick the
-        longest suit; AI never schiebens at this stage.
-
-        ``play_card`` → use ``ai_select_card(hand, lead_suit, operator)``
-        from this module. ``hand`` comes via ``valid_actions["hand"]``.
-
-        Anything else (or missing hand) returns a safe ``noop`` /
-        first-valid fallback. Phases that drive the AI MUST pass
-        ``hand`` in ``valid_actions``.
-        """
         action_type = valid_actions.get("type")
+        play = valid_actions.get("play") or self.current_play
         if action_type == "trump":
-            hand = valid_actions.get("hand")
-            if hand is None:
-                # Defensive fallback — phase should always provide hand.
-                return {"type": "choose_trump", "operator": "Eicheln"}
-            from utils.card_utils import farbe_lang
-            operator = farbe_lang(hand)
-            return {"type": "choose_trump", "operator": operator}
+            return seat._strategy.pick_trump(
+                play, valid_actions.get("schieben_allowed", True),
+            )
         if action_type == "play_card":
-            hand = valid_actions.get("hand")
-            if hand is None:
-                valid = valid_actions.get("valid_cards") or []
-                if valid:
-                    return {"type": "play_card", "card": valid[0]}
-                return {"type": "noop"}
-            lead_suit = valid_actions.get("lead_suit")
-            operator = valid_actions.get("operator", "")
-            card = ai_select_card(hand, lead_suit, operator)
-            return {"type": "play_card", "card": card_to_code(card)}
+            return seat._strategy.pick_card(
+                play,
+                valid_actions.get("lead_suit"),
+                valid_actions.get("trick_so_far") or [],
+            )
         return {"type": "noop"}
 
     async def _weis_phase(self, play: Play) -> None:
@@ -1079,6 +1074,8 @@ class GameSession:
                     # AI seats need the live hand to pick a card via
                     # `ai_select_card`. Humans ignore it.
                     "hand": hand,
+                    "play": play,
+                    "trick_so_far": list(trick_order),
                 })
 
                 if not isinstance(msg, dict):
@@ -1139,6 +1136,10 @@ class GameSession:
                 "by_position": player,
                 "card": card_to_code(card),
             })
+            # Sub-project C: feed AI memory.
+            for s in self.seats:
+                if s.is_ai and s._strategy is not None:
+                    s._strategy.on_card_played(player, card_to_code(card))
             player = play.folger[player]
 
         winner = determine_trick_winner(trick, play.first, play.operator, play.folger)
@@ -1325,6 +1326,11 @@ class GameSession:
         play = Play(spiel_num)
         self.current_play = play
         self._reset_spiel_trick_winners()
+
+        # Sub-project C: notify each AI seat's strategy.
+        for s in self.seats:
+            if s.is_ai and s._strategy is not None:
+                s._strategy.on_spiel_start(play)
 
         # 1. game_start — per-seat redaction.
         def _factory(seat):
