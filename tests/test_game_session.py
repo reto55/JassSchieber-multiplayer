@@ -67,14 +67,15 @@ def test_valid_cards_cannot_follow_suit():
     assert 'RK' in codes
 
 
-def test_valid_cards_trump_under_always_playable():
-    """Trump Under can always be played even when following a different suit."""
+def test_valid_cards_any_trump_always_playable():
+    """Any trump card can be played even when following a different suit."""
     hand = {suit: [] for suit in SUITS}
     hand['Eicheln'] = [Ass(9, 'Eicheln')]
-    hand['Rosen'] = [Under(6, 'Rosen')]  # Rosen is trump
+    hand['Rosen'] = [Under(6, 'Rosen'), Sechs(1, 'Rosen')]  # Rosen is trump
     codes = get_valid_cards(hand, 'Eicheln', 'Rosen')
     assert 'EA' in codes
-    assert 'RU' in codes  # trump Under is always valid
+    assert 'RU' in codes
+    assert 'R6' in codes  # non-Under trumps are now also always valid
 
 
 def test_trick_winner_trump_beats_lead():

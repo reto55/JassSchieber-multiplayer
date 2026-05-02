@@ -57,10 +57,12 @@ def get_valid_cards(hand: dict, lead_suit: Optional[str], operator: str) -> list
         return [card_to_code(c) for c in all_cards]
 
     valid = list(follow_cards)
-    # Trump Under (Bube) can always be played in a trump game
-    if operator in SUITS:
+    # Trump cards may always be played in a trump game (including when the
+    # player could otherwise follow a non-trump lead). When the lead suit IS
+    # the trump suit, `follow_cards` already contains them.
+    if operator in SUITS and lead_suit != operator:
         for c in hand.get(operator, []):
-            if c.__class__.__name__ == 'Under' and c not in valid:
+            if c not in valid:
                 valid.append(c)
 
     return [card_to_code(c) for c in valid]
