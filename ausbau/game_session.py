@@ -177,7 +177,7 @@ class GameSession:
         code: str = "",
         host_principal_id: str = "",
         variant=None,                     # type: Variant | None
-        end_game: int = 10,
+        end_game: int = 1000,
     ):
         from ausbau.room import POSITIONS, Seat, Variant
         self.code = code
