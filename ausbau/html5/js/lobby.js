@@ -16,6 +16,9 @@ const $btnStopSpectate = document.getElementById('btn-stop-spectate');
 const $btnStart = document.getElementById('btn-start');
 const $spectatorCount = document.getElementById('spectator-count');
 const $stateValue = document.getElementById('state-value');
+const $currentTargetScore = document.getElementById('current-target-score');
+const $targetScoreControls = document.getElementById('target-score-controls');
+const btnTargets = document.querySelectorAll('.btn-target');
 
 let currentRoomState = null;
 let myMembership = null; // {role: 'seat'|'spectator', position?: 'comps'|...}
@@ -142,7 +145,24 @@ function render() {
   $btnSpectate.hidden = !!seated || !!spectating;
   $btnStopSpectate.hidden = !spectating;
   $btnStart.hidden = !(amHost && isLobby);
+
+  $currentTargetScore.textContent = currentRoomState.end_game || 1000;
+  $targetScoreControls.hidden = !(amHost && isLobby);
+  
+  btnTargets.forEach(btn => {
+    btn.style.fontWeight = (parseInt(btn.dataset.score) === currentRoomState.end_game) ? 'bold' : 'normal';
+  });
 }
+
+btnTargets.forEach(btn => {
+  btn.addEventListener('click', () => withErrors(async () => {
+    await api(`/rooms/${code}/target_score`, {
+      method: 'POST',
+      body: { target: parseInt(btn.dataset.score) }
+    });
+    await refresh();
+  }));
+});
 
 async function withErrors(fn) {
   $error.textContent = '';
@@ -207,6 +227,7 @@ function handleWsMessage(msg) {
     'seat_kicked',
     'host_changed',
     'spectator_count_changed',
+    'target_score_changed',
   ]);
   if (lobbyEvents.has(msg.type)) {
     refresh();

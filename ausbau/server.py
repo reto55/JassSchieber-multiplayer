@@ -670,6 +670,44 @@ async def ai_difficulty_endpoint(
 
 
 # ---------------------------------------------------------------------------
+# Target score endpoint
+# ---------------------------------------------------------------------------
+
+@app.post("/rooms/{code}/target_score", status_code=200)
+async def target_score_endpoint(
+    code: str,
+    request: Request,
+    response: Response,
+    payload: Optional[dict] = Body(default={}),
+):
+    """Set the target score for the game. Host-only, lobby-only."""
+    from ausbau.room import get_room, principal_id
+
+    room = get_room(code)
+    if room is None:
+        raise HTTPException(404, "room not found")
+
+    principal = await _get_principal(request, response)
+    if principal_id(principal) != room.host_principal_id:
+        raise HTTPException(403, "not host")
+    if room.state != "lobby":
+        raise HTTPException(409, f"lobby only; state={room.state}")
+
+    body = payload or {}
+    target = body.get("target")
+    if target not in (1000, 2500):
+        raise HTTPException(400, "invalid target score")
+
+    room.end_game = target
+
+    await room.broadcast({
+        "type": "target_score_changed",
+        "target": target,
+    })
+    return _room_state_dict(room)
+
+
+# ---------------------------------------------------------------------------
 # WebSocket game endpoint
 # ---------------------------------------------------------------------------
 
