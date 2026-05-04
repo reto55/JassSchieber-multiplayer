@@ -795,7 +795,8 @@ if (btnNewGame) {
       const res = await fetch('/rooms', { 
         method: 'POST', 
         body: JSON.stringify({}), 
-        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'schieber' } 
+        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'schieber' },
+        credentials: 'include'
       });
       if (!res.ok) throw new Error('Failed to create room');
       const room = await res.json();
@@ -821,7 +822,8 @@ if (btnQuit) {
         await fetch(`/rooms/${ROOM_CODE}/leave`, { 
           method: 'POST', 
           body: JSON.stringify({}), 
-          headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'schieber' } 
+          headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'schieber' },
+          credentials: 'include'
         });
       }
     } catch (e) {
