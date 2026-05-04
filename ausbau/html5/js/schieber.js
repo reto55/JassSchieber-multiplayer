@@ -792,9 +792,9 @@ const btnNewGame = document.getElementById('btn-new-game');
 if (btnNewGame) {
   btnNewGame.addEventListener('click', async () => {
     try {
-      const res = await fetch('/rooms', { 
-        method: 'POST', 
-        body: JSON.stringify({}), 
+      const res = await fetch('/rooms', {
+        method: 'POST',
+        body: JSON.stringify({}),
         headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'schieber' },
         credentials: 'include'
       });
@@ -819,9 +819,9 @@ if (btnQuit) {
   btnQuit.addEventListener('click', async () => {
     try {
       if (ROOM_CODE) {
-        await fetch(`/rooms/${ROOM_CODE}/leave`, { 
-          method: 'POST', 
-          body: JSON.stringify({}), 
+        await fetch(`/rooms/${ROOM_CODE}/leave`, {
+          method: 'POST',
+          body: JSON.stringify({}),
           headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'schieber' },
           credentials: 'include'
         });
