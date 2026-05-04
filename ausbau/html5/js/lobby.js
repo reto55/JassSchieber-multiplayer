@@ -220,7 +220,7 @@ function handleWsMessage(msg) {
 
 (async () => {
   if (!code) {
-    $error.textContent = 'Missing ?code=ABCDEF in URL.';
+    window.location.href = '/home';
     return;
   }
   await fetchWho();

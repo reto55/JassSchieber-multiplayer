@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Schieber - Multiplayer Jass</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/home.css">
+</head>
+<body>
+  <div id="auth-strip" class="glass-strip">
+    <div class="brand">Schieber</div>
+    <div id="auth-info">…</div>
+  </div>
+
+  <main class="home-container">
+    <div class="glass-panel">
+      <div class="hero-section">
+        <h1 class="title">Schieber</h1>
+        <p class="subtitle">Swiss Jass Multiplayer</p>
+      </div>
+
+      <div id="error" class="error-message" role="alert" hidden></div>
+
+      <div class="actions">
+        <div class="action-card create-action">
+          <h2>Start a Game</h2>
+          <p>Create a new room and invite your friends to play.</p>
+          <button id="btn-create" class="btn btn-primary" type="button">
+            <span>Create Room</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+          </button>
+        </div>
+
+        <div class="divider">
+          <span>OR</span>
+        </div>
+
+        <div class="action-card join-action">
+          <h2>Join a Game</h2>
+          <p>Enter a room code to join an existing game.</p>
+          <form id="form-join" class="join-form">
+            <input type="text" id="input-code" class="input-modern" placeholder="Room Code (e.g., ABCDEF)" required autocomplete="off" spellcheck="false" maxlength="10">
+            <button type="submit" class="btn btn-secondary">
+              <span>Join</span>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon"><polyline points="9 18 15 12 9 6"></polyline></svg>
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Background decorations -->
+  <div class="blob blob-1"></div>
+  <div class="blob blob-2"></div>
+  <div class="blob blob-3"></div>
+
+  <script src="/static/js/home.js"></script>
+</body>
+</html>

@@ -73,14 +73,26 @@ app.mount("/static", StaticFiles(directory=_HTML5), name="static")
 
 
 @app.get("/")
-def index():
+def index(request: Request):
+    if "code" not in request.query_params:
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(url="/home")
     return FileResponse(os.path.join(_HTML5, "game.html"))
 
 
 @app.get("/lobby")
-def lobby_page():
+def lobby_page(request: Request):
     """Static lobby page for a room. The page reads ?code=… via JS."""
+    if "code" not in request.query_params:
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(url="/home")
     return FileResponse(os.path.join(_HTML5, "lobby.html"))
+
+
+@app.get("/home")
+def home_page():
+    """Static home page to create or join rooms."""
+    return FileResponse(os.path.join(_HTML5, "home.html"))
 
 
 # ---------------------------------------------------------------------------

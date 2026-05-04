@@ -1,0 +1,31 @@
+Resume this session with:
+claude --resume 7dffdfae-36b2-4e43-8ae7-49941d5fbc5e
+
+To resume in a new session:                               
+                                                                                                                 
+  cd /mnt/archive/Dokumente/JassSchieber-multiplayer        
+                                                                                                                 
+  Then ask:
+                                                                                                                 
+  ▎ Continue executing the multiplayer plan starting from Task 10. Plan:                                         
+  ▎ docs/superpowers/plans/2026-04-28-schieber-multiplayer-part2.md. Spec: 
+  ▎ docs/superpowers/specs/2026-04-28-schieber-multiplayer-design.md. Use                                        
+  ▎ superpowers:subagent-driven-development. Tasks 7–9 are done; 10–25 remain. Note that Task 9 dropped some 
+  ▎ sub-project B E4 error-handler coverage on the new /ws/{code} endpoint — restore generic Exception catch
+  ▎ before production.
+
+  Sub-project C (AI difficulty) has not been started — separate brainstorm/spec/plan/exec cycle whenever you want
+   it.
+
+master now contains all three sub-projects (A multiplayer + B accounts + C AI difficulty). 15 new commits + merge. Final      
+  state:
+  - 325 tests passing, 0 skipped                                                                                                
+  - 3 difficulty levels wired through Seat.ai_difficulty + strategy pattern                                                     
+  - Default = medium = today's behavior → zero-surprise upgrade            
+  - Branch feat/ai-difficulty deleted (merged)                                                                                  
+                                                                                                                                
+  Per CLAUDE.md, all three sub-projects are now done. Future work is variant expansion (§7.7) and stronger AI (sub-project D —  
+  partner inference, minimax) — both intentionally out of scope.  
+  
+  claude --resume 69f9d244-87e9-4d21-b131-886b51490b09
+

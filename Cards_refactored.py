@@ -202,9 +202,9 @@ class Hand:
 class Players:
     """Manages players and their cards"""
     
-    def __init__(self, spiel_num=1, compo=None, compn=None, compe=None, comps=None,
+    def __init__(self, spiel_num=None, compo=None, compn=None, compe=None, comps=None,
                  ost=None, nor=None, est=None, sud=None):
-        self.spiel_num = spiel_num
+        self.spiel_num = spiel_num if spiel_num is not None else 0
         self.ost = ost if ost is not None else []
         self.nor = nor if nor is not None else []
         self.est = est if est is not None else []
@@ -253,14 +253,14 @@ class Players:
 class Play(Players):
     """Main game play class"""
     
-    def __init__(self, spiel=1, game=None, stich=None, lastf=None, partner=None, 
-                 folger=None, operator='', starter='', farben=None, wis=None, 
+    def __init__(self, spiel=None, game=None, stich=None, lastf=None, partner=None, 
+                 folger=None, operator=None, starter=None, farben=None, wis=None, 
                  wis4=None, first=None, **kwargs):
-        self.spiel = spiel
-        self.operator = operator
+        self.spiel = spiel if spiel is not None else 0
+        self.operator = operator if operator is not None else ''
         self.wis = wis if wis is not None else []
         self.wis4 = wis4 if wis4 is not None else []
-        self.first = first
+        self.first = first if first is not None else ''
         
         # Initialize game states
         self.game = game if game is not None else {player: [] for player in ['compo', 'comps', 'compn', 'compe']}
@@ -282,7 +282,7 @@ class Play(Players):
             'compo': [], 'comps': [], 'compn': [], 'compe': []
         }
         
-        self.starter = starter
+        self.starter = starter if starter is not None else ''
         
         # Initialize card values for each suit and rank
         self.farben = farben if farben is not None else {
@@ -299,10 +299,10 @@ class Play(Players):
         """Configure the game based on the current round"""
         if self.spiel == 1:
             self._setup_round("compo")
-        elif self.spiel == 2:
-            self._setup_round("compn") 
+        elif self.spiel == 2: 
+            self._setup_round("compn")            
         elif self.spiel == 3:
-            self._setup_round("compe")
+            self._setup_round("compe")          
         elif self.spiel == 4:
             self._setup_round("comps")
     

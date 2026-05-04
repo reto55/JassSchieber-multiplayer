@@ -43,11 +43,7 @@ function teamOf(position) {
 // the local seat, `right` = folger[bottom], `top` = folger[right] (=
 // partner), `left` = folger[top]. Spectators view from `comps` for now.
 function computeLayout(myPos) {
-  const me = myPos || 'comps';
-  const right = FOLGER[me];
-  const top = FOLGER[right];
-  const left = FOLGER[top];
-  return { bottom: me, right, top, left };
+  return { bottom: 'comps', right: 'compo', top: 'compn', left: 'compe' };
 }
 
 // ─── Game state ───────────────────────────────────────────────────────────────
@@ -60,14 +56,22 @@ const state = {
   targetScore: 1000,
   // Per-seat metadata keyed by position.
   seats: {
-    comps: { display_name: 'Süd', is_partner: false, card_count: 0,
-             paused: false, ai: false },
-    compn: { display_name: 'Nord', is_partner: false, card_count: 0,
-             paused: false, ai: false },
-    compo: { display_name: 'Ost', is_partner: false, card_count: 0,
-             paused: false, ai: false },
-    compe: { display_name: 'West', is_partner: false, card_count: 0,
-             paused: false, ai: false },
+    comps: {
+      display_name: 'Süd', is_partner: false, card_count: 0,
+      paused: false, ai: false
+    },
+    compn: {
+      display_name: 'Nord', is_partner: false, card_count: 0,
+      paused: false, ai: false
+    },
+    compo: {
+      display_name: 'Ost', is_partner: false, card_count: 0,
+      paused: false, ai: false
+    },
+    compe: {
+      display_name: 'West', is_partner: false, card_count: 0,
+      paused: false, ai: false
+    },
   },
   trick: { comps: null, compn: null, compo: null, compe: null },
   validCards: [],
@@ -85,8 +89,8 @@ function wsUrl() {
 
 function connect() {
   if (!ROOM_CODE) {
-    appendLog('Kein Raumcode in URL — Weiterleitung zur Lobby…', 'error');
-    window.location.href = '/lobby';
+    appendLog('Kein Raumcode in URL — Weiterleitung zur Startseite…', 'error');
+    window.location.href = '/home';
     return;
   }
   ws = new WebSocket(wsUrl());
@@ -128,29 +132,29 @@ function sendPlayCard(code) {
 // ─── Dispatch ─────────────────────────────────────────────────────────────────
 
 const handlers = {
-  game_start:        onGameStart,
-  room_resume:       onRoomResume,
-  trump_request:     onTrumpRequest,
-  trump_pending:     onTrumpPending,
-  trump_chosen:      onTrumpChosen,
-  weis_request:      onWeisRequest,
-  weis_resolution:   onWeisResolution,
-  play_request:      onPlayRequest,
-  play_pending:      onPlayPending,
-  card_played:       onCardPlayed,
-  trick_end:         onTrickEnd,
-  spiel_end:         onSpielEnd,
-  game_end:          onGameEnd,
-  seat_paused:       onSeatPaused,
-  seat_reclaimed:    onSeatReclaimed,
-  seat_ai_takeover:  onSeatAiTakeover,
-  seat_changed:      onSeatChanged,
-  seat_kicked:       onSeatKicked,
-  host_changed:      onHostChanged,
-  seat_swap_request:  onSeatSwapRequest,
+  game_start: onGameStart,
+  room_resume: onRoomResume,
+  trump_request: onTrumpRequest,
+  trump_pending: onTrumpPending,
+  trump_chosen: onTrumpChosen,
+  weis_request: onWeisRequest,
+  weis_resolution: onWeisResolution,
+  play_request: onPlayRequest,
+  play_pending: onPlayPending,
+  card_played: onCardPlayed,
+  trick_end: onTrickEnd,
+  spiel_end: onSpielEnd,
+  game_end: onGameEnd,
+  seat_paused: onSeatPaused,
+  seat_reclaimed: onSeatReclaimed,
+  seat_ai_takeover: onSeatAiTakeover,
+  seat_changed: onSeatChanged,
+  seat_kicked: onSeatKicked,
+  host_changed: onHostChanged,
+  seat_swap_request: onSeatSwapRequest,
   seat_swap_committed: onSeatSwapCommitted,
-  seat_swap_expired:  onSeatSwapExpired,
-  error:             onError,
+  seat_swap_expired: onSeatSwapExpired,
+  error: onError,
 };
 
 function dispatch(msg) {
@@ -182,9 +186,9 @@ async function bootAuth() {
     if (me.kind === 'user') {
       const verified = me.is_verified ? '✓' : '⚠';
       el.innerHTML = `${escapeHtml(me.display_name)} (${verified}) ` +
-                     `<a href="/account" style="color:#9cf">Account</a> · ` +
-                     `<a href="#" id="logoutBtn" style="color:#9cf">Logout</a>` +
-                     codeBadge;
+        `<a href="/account" style="color:#9cf">Account</a> · ` +
+        `<a href="#" id="logoutBtn" style="color:#9cf">Logout</a>` +
+        codeBadge;
       const btn = document.getElementById('logoutBtn');
       if (btn) {
         btn.addEventListener('click', async (e) => {
@@ -198,9 +202,9 @@ async function bootAuth() {
       }
     } else {
       el.innerHTML = `Playing as ${escapeHtml(me.display_name)} ` +
-                     `<a href="/login" style="color:#9cf">Sign in</a> · ` +
-                     `<a href="/signup" style="color:#9cf">Sign up</a>` +
-                     codeBadge;
+        `<a href="/login" style="color:#9cf">Sign in</a> · ` +
+        `<a href="/signup" style="color:#9cf">Sign up</a>` +
+        codeBadge;
     }
   } catch (err) {
     console.warn('auth boot failed', err);
@@ -227,16 +231,17 @@ function renderScores() {
 // fixed slot ids (player-compe / player-compn / player-compo) by historical
 // happenstance; we now drive their content from `state.seats[layout.X]`.
 function renderAIBar() {
-  const slots = [
-    { domId: 'player-compe', layoutKey: 'left' },   // historic Westen slot
-    { domId: 'player-compn', layoutKey: 'top' },    // historic Nord slot
-    { domId: 'player-compo', layoutKey: 'right' },  // historic Osten slot
-  ];
-  for (const slot of slots) {
-    const pos = state.layout[slot.layoutKey];
+  const allPositions = ['compe', 'compn', 'compo', 'comps'];
+  for (const pos of allPositions) {
     const seat = state.seats[pos];
-    const wrap = document.getElementById(slot.domId);
+    const wrap = document.getElementById(`player-${pos}`);
     if (!wrap) continue;
+
+    if (pos === state.myPosition) {
+      wrap.style.display = 'none';
+      continue;
+    }
+    wrap.style.display = '';
     wrap.classList.toggle('partner', !!seat.is_partner);
     wrap.classList.toggle('paused', !!seat.paused);
     wrap.classList.toggle('ai', !!seat.ai);
@@ -673,8 +678,8 @@ function onGameEnd(msg) {
   }
   const t = msg.winner_team;
   const lbl = t === 'sn' ? 'Team Süd-Nord'
-            : t === 'ow' ? 'Team Ost-West'
-            : t === 'tie' ? 'Unentschieden' : (t || '?');
+    : t === 'ow' ? 'Team Ost-West'
+      : t === 'tie' ? 'Unentschieden' : (t || '?');
   appendLog(`🏆 Spiel vorbei! ${lbl}.`);
   appendLog(`Endstand: SN ${state.scores.sn} / OW ${state.scores.ow}.`);
 }

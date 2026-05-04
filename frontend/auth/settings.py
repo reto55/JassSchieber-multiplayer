@@ -26,6 +26,8 @@ class Settings(BaseSettings):
 
 def load_settings() -> Settings:
     import os
+    from dotenv import load_dotenv, find_dotenv
+    load_dotenv(find_dotenv())
     if not os.environ.get("ADMIN_BOOTSTRAP_EMAIL"):
         raise RuntimeError(
             "ADMIN_BOOTSTRAP_EMAIL is required at startup. "

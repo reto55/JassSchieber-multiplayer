@@ -1143,6 +1143,8 @@ class GameSession:
                 if s.is_ai and s._strategy is not None:
                     s._strategy.on_card_played(player, card_to_code(card))
             player = play.folger[player]
+            
+            await asyncio.sleep(1)
 
         winner = determine_trick_winner(trick, play.first, play.operator, play.folger)
         pts = trick_points(
@@ -1165,6 +1167,8 @@ class GameSession:
             "winner_team": winner_team,
             "points": pts,
         })
+
+        await asyncio.sleep(1)
 
         # Append to replay buffer (Task 16). Each entry is a fully-redacted
         # snapshot — `by` is the per-seat play list in trick order, plus the
