@@ -133,6 +133,20 @@
   </div>
 </div>
 
+<!-- Game Over modal -->
+<div id="game-over-modal" class="modal hidden">
+  <div class="modal-overlay"></div>
+  <div class="modal-box">
+    <h3 id="game-over-title">🏆 Spiel vorbei!</h3>
+    <p id="game-over-message"></p>
+    <div class="modal-actions" style="flex-direction: column; gap: 10px;">
+      <button id="btn-new-game" class="btn-primary">Start a new game</button>
+      <button id="btn-home" class="btn-secondary">Go back to Home</button>
+      <button id="btn-quit" class="btn-secondary" style="background: #cc4444; color: white;">Quit</button>
+    </div>
+  </div>
+</div>
+
 <script src="/static/js/schieber.js"></script>
 </body>
 </html>

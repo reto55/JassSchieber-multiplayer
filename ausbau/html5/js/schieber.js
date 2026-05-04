@@ -682,6 +682,13 @@ function onGameEnd(msg) {
       : t === 'tie' ? 'Unentschieden' : (t || '?');
   appendLog(`🏆 Spiel vorbei! ${lbl}.`);
   appendLog(`Endstand: SN ${state.scores.sn} / OW ${state.scores.ow}.`);
+
+  const modal = document.getElementById('game-over-modal');
+  const msgEl = document.getElementById('game-over-message');
+  if (modal && msgEl) {
+    msgEl.innerHTML = `<strong>${lbl} gewinnt!</strong><br><br>Endstand: SN ${state.scores.sn} / OW ${state.scores.ow}.`;
+    modal.classList.remove('hidden');
+  }
 }
 
 function onSeatPaused(msg) {
@@ -778,4 +785,48 @@ function playCard(code) {
   state.validCards = [];
   renderHand();
   sendPlayCard(code);
+}
+
+// ─── Game Over Actions ────────────────────────────────────────────────────────
+const btnNewGame = document.getElementById('btn-new-game');
+if (btnNewGame) {
+  btnNewGame.addEventListener('click', async () => {
+    try {
+      const res = await fetch('/rooms', { 
+        method: 'POST', 
+        body: JSON.stringify({}), 
+        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'schieber' } 
+      });
+      if (!res.ok) throw new Error('Failed to create room');
+      const room = await res.json();
+      window.location.href = `/lobby?code=${room.code}`;
+    } catch (e) {
+      appendLog("Fehler beim Erstellen eines neuen Spiels: " + e.message, 'error');
+    }
+  });
+}
+
+const btnHome = document.getElementById('btn-home');
+if (btnHome) {
+  btnHome.addEventListener('click', () => {
+    window.location.href = '/home';
+  });
+}
+
+const btnQuit = document.getElementById('btn-quit');
+if (btnQuit) {
+  btnQuit.addEventListener('click', async () => {
+    try {
+      if (ROOM_CODE) {
+        await fetch(`/rooms/${ROOM_CODE}/leave`, { 
+          method: 'POST', 
+          body: JSON.stringify({}), 
+          headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'schieber' } 
+        });
+      }
+    } catch (e) {
+      console.warn('Failed to leave room', e);
+    }
+    window.location.href = '/home';
+  });
 }
