@@ -67,6 +67,10 @@ def calculate_points(stiche, operator):
             else:
                 # Normal suit points
                 total_points += card.value
+    if operator in ['Schellen', 'Schilten']:
+        total_points *= 2
+    elif operator in ['Oben', 'Unten']:
+        total_points *= 3
                 
     return total_points
 

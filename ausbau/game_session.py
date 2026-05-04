@@ -113,6 +113,12 @@ def trick_points(trick: dict, operator: str, *, trumpf_bock: bool = False) -> in
             total += card.woben
         else:
             total += card.wunten
+            
+    if operator in ['Schellen', 'Schilten']:
+        total *= 2
+    elif operator in ['Oben', 'Unten']:
+        total *= 3
+
     if trumpf_bock and operator in SUITS:
         total *= 5
     return total
@@ -135,17 +141,24 @@ def ai_select_card(hand: dict, lead_suit: Optional[str], operator: str) -> Card:
     return min(valid_cards, key=point_value)
 
 
-def describe_weis(weis_combos: list, weis_gleiche: list) -> list:
+def describe_weis(weis_combos: list, weis_gleiche: list, operator: str = "") -> list:
     """Convert raw wiis() / wiis_gleiche() output to human-readable dicts."""
     result = []
     SCORE_MAP = {3: ('Dreier', 20), 4: ('Vierter', 50)}
+    
+    multiplier = 1
+    if operator in ['Schellen', 'Schilten']:
+        multiplier = 2
+    elif operator in ['Oben', 'Unten']:
+        multiplier = 3
+        
     for suit_idx, seq_len, _ in weis_combos:
         if seq_len is None or seq_len < 3:
             continue
         name, pts = SCORE_MAP.get(seq_len, (f'{seq_len}er', 100))
-        result.append({'name': name, 'suit': SUITS[suit_idx], 'points': pts})
+        result.append({'name': name, 'suit': SUITS[suit_idx], 'points': pts * multiplier})
     if weis_gleiche:
-        result.append({'name': 'Viererle', 'suit': None, 'points': 100})
+        result.append({'name': 'Viererle', 'suit': None, 'points': 100 * multiplier})
     return result
 
 
@@ -903,6 +916,7 @@ class GameSession:
             eligible[pos] = describe_weis(
                 wiis(hand_for[pos]),
                 wiis_gleiche(hand_for[pos]),
+                operator=play.operator
             )
 
         # Send each seat their (and only their) prompt.
@@ -1248,7 +1262,12 @@ class GameSession:
                     sn += 20
                 else:
                     ow += 20
-        return (sn, ow)
+                    
+        multiplier = 1
+        if play.operator in ['Schellen', 'Schilten']:
+            multiplier = 2
+            
+        return (sn * multiplier, ow * multiplier)
 
     def _game_start_for(self, position) -> dict:
         """Build a per-seat ``game_start`` payload (Task 18).

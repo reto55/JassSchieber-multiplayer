@@ -98,13 +98,13 @@ class TestGameUtils(unittest.TestCase):
         
         # Test with Oben mode
         points = calculate_points(self.stiche, "Oben")
-        # Expected: 5 (Eicheln oben) + 3 (Rosen oben) + 4 (Schellen oben) + 2 (Schilten oben) = 14
-        self.assertEqual(points, 14, "Points in Oben mode should be 14")
+        # Expected: (5 (Eicheln oben) + 3 (Rosen oben) + 4 (Schellen oben) + 2 (Schilten oben)) * 3 = 42
+        self.assertEqual(points, 42, "Points in Oben mode should be 42")
         
         # Test with Unten mode
         points = calculate_points(self.stiche, "Unten")
-        # Expected: 2 (Eicheln unten) + 7 (Rosen unten) + 6 (Schellen unten) + 8 (Schilten unten) = 23
-        self.assertEqual(points, 23, "Points in Unten mode should be 23")
+        # Expected: (2 (Eicheln unten) + 7 (Rosen unten) + 6 (Schellen unten) + 8 (Schilten unten)) * 3 = 69
+        self.assertEqual(points, 69, "Points in Unten mode should be 69")
         
     def test_check_game_end(self):
         """Test the check_game_end function."""
