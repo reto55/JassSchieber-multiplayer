@@ -29,7 +29,7 @@ async def test_fast_clock(fast_clock):
     assert (t1 - t0) < 1.0  # actually returns instantly
 
 
-def test_rooms_isolated_per_test():
+async def test_rooms_isolated_per_test():
     from ausbau.room import ROOMS, create_room, Variant
     from frontend.auth.guest import Guest
     g = Guest(guest_id='a' * 32)
@@ -37,7 +37,7 @@ def test_rooms_isolated_per_test():
     assert len(ROOMS) == 1
 
 
-def test_rooms_isolated_per_test_round2():
+async def test_rooms_isolated_per_test_round2():
     from ausbau.room import ROOMS
     # autouse fixture should have cleared ROOMS between tests
     assert len(ROOMS) == 0
