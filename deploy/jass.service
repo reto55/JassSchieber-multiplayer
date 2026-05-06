@@ -14,7 +14,7 @@ WorkingDirectory=/home/reto/Dokumente/JassSchieber-multiplayer
 # Start Uvicorn pointing to the FastAPI app.
 # By default, we run on 127.0.0.1:8000 so it is not exposed publicly,
 # only the Apache proxy can access it.
-ExecStart=/home/reto/Dokumente/JassSchieber-multiplayer/.venv/bin/uvicorn ausbau.server:app --host 127.0.0.1 --port 8000
+ExecStart=/home/reto/Dokumente/JassSchieber-multiplayer/.venv/bin/uvicorn ausbau.server:app --host 127.0.0.1 --port 8000 --proxy-headers --forwarded-allow-ips=*
 # Note: If you're not using a virtual environment in .venv, change the path above to just `uvicorn`
 # or the absolute path to your global uvicorn installation.
 
