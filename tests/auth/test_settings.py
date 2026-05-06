@@ -4,6 +4,25 @@ import pytest
 from frontend.auth.settings import Settings, load_settings
 
 
+@pytest.fixture(autouse=True)
+def _isolate_env(monkeypatch):
+    """Suppress .env loading (both `load_dotenv` and pydantic-settings'
+    own env_file reader) and clear auth env vars so each test sees only
+    what it explicitly sets via monkeypatch.setenv."""
+    from pydantic_settings import SettingsConfigDict
+    monkeypatch.setattr("dotenv.load_dotenv", lambda *a, **kw: None)
+    monkeypatch.setattr(
+        Settings, "model_config",
+        SettingsConfigDict(env_file=None, extra="ignore"),
+    )
+    for var in (
+        "SECRET_KEY", "BASE_URL", "SMTP_HOST", "SMTP_PORT",
+        "SMTP_USER", "SMTP_APP_PASSWORD", "MAIL_BACKEND",
+        "ADMIN_BOOTSTRAP_EMAIL", "AUTH_DB_URL",
+    ):
+        monkeypatch.delenv(var, raising=False)
+
+
 def test_settings_required_fields(monkeypatch):
     monkeypatch.setenv("SECRET_KEY", "k" * 32)
     monkeypatch.setenv("BASE_URL", "https://example.test")
@@ -19,7 +38,6 @@ def test_settings_required_fields(monkeypatch):
 
 
 def test_settings_missing_admin_bootstrap_raises(monkeypatch):
-    monkeypatch.delenv("ADMIN_BOOTSTRAP_EMAIL", raising=False)
     monkeypatch.setenv("SECRET_KEY", "k" * 32)
     monkeypatch.setenv("BASE_URL", "https://example.test")
     monkeypatch.setenv("SMTP_USER", "bot@example.test")
