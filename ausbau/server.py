@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from fastapi import FastAPI, Request, Response, WebSocket, WebSocketDisconnect, HTTPException, Body
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional
 from slowapi.errors import RateLimitExceeded
 from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession
@@ -40,6 +41,22 @@ async def _lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=_lifespan)
+
+# CORS for browsers reaching the deployed app at platzanu.ch (apache2 reverse
+# proxy → uvicorn) and for local development. allow_credentials=True is
+# required so the auth/guest cookies travel with cross-origin requests.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "https://platzanu.ch",
+        "https://www.platzanu.ch",
+        "http://localhost:8765",
+        "http://127.0.0.1:8765",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Initialise auth engine for principal lookup. Done lazily so that running tests
 # that don't use /ws don't require auth env vars to be set.
