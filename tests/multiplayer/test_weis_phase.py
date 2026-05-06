@@ -37,11 +37,14 @@ class FakePlay:
     seat-by-seat. Hands are empty dicts (one per suit) so the real
     `wiis` / `wiis_gleiche` don't crash on missing keys.
     """
-    def __init__(self):
+    def __init__(self, operator: str = "Eicheln"):
         self.comps = _empty_hand()
         self.compn = _empty_hand()
         self.compo = _empty_hand()
         self.compe = _empty_hand()
+        # _weis_phase reads play.operator to pass into describe_weis. Tests
+        # patch describe_weis itself, but the attribute access still happens.
+        self.operator = operator
 
 
 def _fresh_session():
