@@ -4,6 +4,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import asyncio
 import secrets
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from fastapi import FastAPI, Request, Response, WebSocket, WebSocketDisconnect, HTTPException, Body
 from fastapi.staticfiles import StaticFiles
@@ -20,7 +21,25 @@ from frontend.auth.app import build_app
 from frontend.auth.email import ConsoleMailBackend, SmtpMailBackend
 from ausbau.game_session import GameSession
 
-app = FastAPI()
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    # Mount auth routes and create auth.db tables on first launch. Done here
+    # (not at module load) so that importing ausbau.server during tests does
+    # not require real auth env vars to be set.
+    _ensure_auth_initialised()
+    _auth_app = _build_auth_app()
+    for route in _auth_app.routes:
+        app.router.routes.append(route)
+    await init_db(_auth_engine)
+    # Spawn the rooms reaper background task (Task 21, spec §2.3). Iterates
+    # ROOMS every REAPER_INTERVAL_SECONDS and removes rooms that finished
+    # or went human-empty more than ROOM_FINISHED_LINGER_SECONDS ago.
+    from ausbau.room import reaper_loop
+    asyncio.create_task(reaper_loop(), name="rooms_reaper")
+    yield
+
+
+app = FastAPI(lifespan=_lifespan)
 
 # Initialise auth engine for principal lookup. Done lazily so that running tests
 # that don't use /ws don't require auth env vars to be set.
@@ -111,36 +130,6 @@ async def _rate_limit_handler(request: Request, exc: RateLimitExceeded):
     )
 
 
-@app.on_event("startup")
-async def _auth_init_db():
-    """Mount auth routes and create auth.db tables on first launch.
-
-    Done here (not at module load) so that importing ausbau.server during
-    tests does not require real auth env vars to be set.
-    """
-    _ensure_auth_initialised()
-    # Build auth sub-app and copy its routes onto the main app so that
-    # /auth/*, /admin/*, /login, /signup etc. are all reachable on the same
-    # uvicorn process without path-prefix games.  Middleware (slowapi) doesn't
-    # carry over via this mechanism — the RateLimitExceeded handler above
-    # covers it on the main app.
-    _auth_app = _build_auth_app()
-    for route in _auth_app.routes:
-        app.router.routes.append(route)
-    await init_db(_auth_engine)
-
-
-@app.on_event("startup")
-async def _start_reaper():
-    """Spawn the rooms reaper background task (Task 21, spec §2.3).
-
-    Iterates ``ROOMS`` every ``REAPER_INTERVAL_SECONDS`` and removes
-    rooms that finished or went human-empty more than
-    ``ROOM_FINISHED_LINGER_SECONDS`` ago. Per-iteration exceptions are
-    logged inside the loop so the task survives transient errors.
-    """
-    from ausbau.room import reaper_loop
-    asyncio.create_task(reaper_loop(), name="rooms_reaper")
 
 
 # ---------------------------------------------------------------------------
