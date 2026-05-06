@@ -22,7 +22,9 @@ async def client():
 
 
 async def test_game_page_serves_html(client):
-    r = await client.get("/")
+    # `/` redirects to `/home` when no ?code= is present; the game page
+    # itself is served at `/?code=…` (or any path with the code param).
+    r = await client.get("/?code=TEST01")
     assert r.status_code == 200, r.text
     body = r.text
     assert "Schieber" in body
