@@ -107,7 +107,7 @@ def test_trick_points_oben_mode():
         'compn': Ass(9, 'Schellen'),     # woben=11
         'compe': Under(6, 'Schilten'),   # woben=2
     }
-    assert trick_points(trick, 'Oben') == 27  # 10+4+11+2
+    assert trick_points(trick, 'Oben') == 81  # (10+4+11+2) * 3 (Oben multiplier)
 
 
 def test_trick_points_trumpf_mode():

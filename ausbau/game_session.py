@@ -96,14 +96,34 @@ def determine_trick_winner(trick: dict, first: str, operator: str, folger: dict)
     return winner
 
 
-def trick_points(trick: dict, operator: str, *, trumpf_bock: bool = False) -> int:
-    """Sum point values of all cards in the trick for the given mode.
+def _mode_multiplier(operator: str, *, trumpf_bock: bool = False) -> int:
+    """Schieber Multiplikator. Single source of truth for the per-mode
+    score multiplier. Used by ``trick_points``, ``describe_weis``,
+    ``_apply_stoeck``, and the last-trick +5 bonus in ``_run_spiel``.
 
-    Per spec §7.1, the ``trumpf_bock`` variant multiplies the trick total
-    by 5 in trump-mode rounds (``operator in SUITS``). It does NOT apply
-    to ``Oben`` / ``Unten`` rounds, nor to weis or stöck. Weis points are
-    awarded by ``_weis_phase`` and stöck by ``_apply_stoeck`` — neither
-    routes through this function.
+    Standard Swiss values: Eicheln/Rosen ×1, Schellen/Schilten ×2,
+    Oben/Unten ×3. The ``trumpf_bock`` variant stacks ×5 on top of the
+    base in trump-mode rounds only (no effect in Oben/Unten).
+    """
+    if operator in ('Schellen', 'Schilten'):
+        m = 2
+    elif operator in ('Oben', 'Unten'):
+        m = 3
+    else:
+        m = 1
+    if trumpf_bock and operator in SUITS:
+        m *= 5
+    return m
+
+
+def trick_points(trick: dict, operator: str, *, trumpf_bock: bool = False) -> int:
+    """Sum point values of all cards in the trick for the given mode,
+    multiplied by ``_mode_multiplier(operator, trumpf_bock=…)``.
+
+    Per spec §7.1, ``trumpf_bock`` adds ×5 in trump-mode rounds. Weis
+    and Stöck do not route through this function — they apply the same
+    base multiplier via ``describe_weis`` / ``_apply_stoeck`` but ignore
+    ``trumpf_bock``.
     """
     total = 0
     for card in trick.values():
@@ -113,15 +133,7 @@ def trick_points(trick: dict, operator: str, *, trumpf_bock: bool = False) -> in
             total += card.woben
         else:
             total += card.wunten
-            
-    if operator in ['Schellen', 'Schilten']:
-        total *= 2
-    elif operator in ['Oben', 'Unten']:
-        total *= 3
-
-    if trumpf_bock and operator in SUITS:
-        total *= 5
-    return total
+    return total * _mode_multiplier(operator, trumpf_bock=trumpf_bock)
 
 
 def ai_select_card(hand: dict, lead_suit: Optional[str], operator: str) -> Card:
@@ -145,13 +157,7 @@ def describe_weis(weis_combos: list, weis_gleiche: list, operator: str = "") -> 
     """Convert raw wiis() / wiis_gleiche() output to human-readable dicts."""
     result = []
     SCORE_MAP = {3: ('Dreier', 20), 4: ('Vierter', 50)}
-    
-    multiplier = 1
-    if operator in ['Schellen', 'Schilten']:
-        multiplier = 2
-    elif operator in ['Oben', 'Unten']:
-        multiplier = 3
-        
+    multiplier = _mode_multiplier(operator) if operator else 1
     for suit_idx, seq_len, _ in weis_combos:
         if seq_len is None or seq_len < 3:
             continue
@@ -1262,11 +1268,7 @@ class GameSession:
                     sn += 20
                 else:
                     ow += 20
-                    
-        multiplier = 1
-        if play.operator in ['Schellen', 'Schilten']:
-            multiplier = 2
-            
+        multiplier = _mode_multiplier(play.operator)
         return (sn * multiplier, ow * multiplier)
 
     def _game_start_for(self, position) -> dict:
@@ -1393,11 +1395,14 @@ class GameSession:
             self._current_trick_so_far = []
             winner, _trick_pts = await self._play_trick(play)
             if trick_num == 8:
-                # last-trick +5 bonus (rule, unaffected by variants)
+                # last-trick +5 bonus, multiplied by the mode multiplier
+                # (per Schieber Multiplikator). Variant trumpf_bock is not
+                # applied here — same scope as weis/stoeck.
+                last_trick = 5 * _mode_multiplier(play.operator)
                 if winner in SN_PLAYERS:
-                    self.point_sn += 5
+                    self.point_sn += last_trick
                 else:
-                    self.point_ow += 5
+                    self.point_ow += last_trick
             play.first = winner
 
         # 6. match bonus (variant-gated)

@@ -74,8 +74,9 @@ def test_trumpf_bock_on_trump_round():
 
 
 def test_trumpf_bock_no_effect_on_oben():
-    """Oben round, ``trumpf_bock=True`` → NOT multiplied (not a trump mode)."""
-    # Oben values: Ass=11, Koenig=4, Banner=10, Under=2 = 27.
+    """Oben round, ``trumpf_bock=True`` → bock NOT applied (not a trump
+    mode). The Oben mode multiplier ×3 still applies."""
+    # Oben values: Ass=11, Koenig=4, Banner=10, Under=2 = 27 → ×3 = 81.
     trick = {
         "compo": Ass(rank=9, suit="Eicheln"),
         "compn": Koenig(rank=8, suit="Rosen"),
@@ -83,12 +84,13 @@ def test_trumpf_bock_no_effect_on_oben():
         "comps": Under(rank=6, suit="Schilten"),
     }
     pts = trick_points(trick, "Oben", trumpf_bock=True)
-    assert pts == 11 + 4 + 10 + 2
+    assert pts == (11 + 4 + 10 + 2) * 3
 
 
 def test_trumpf_bock_no_effect_on_unten():
-    """Unten round, ``trumpf_bock=True`` → NOT multiplied."""
-    # Unten values: Ass=0, Koenig=4, Banner=10, Under=2 = 16.
+    """Unten round, ``trumpf_bock=True`` → bock NOT applied. Unten
+    mode multiplier ×3 still applies."""
+    # Unten values: Ass=0, Koenig=4, Banner=10, Under=2 = 16 → ×3 = 48.
     trick = {
         "compo": Ass(rank=9, suit="Eicheln"),
         "compn": Koenig(rank=8, suit="Rosen"),
@@ -96,7 +98,7 @@ def test_trumpf_bock_no_effect_on_unten():
         "comps": Under(rank=6, suit="Schilten"),
     }
     pts = trick_points(trick, "Unten", trumpf_bock=True)
-    assert pts == 0 + 4 + 10 + 2
+    assert pts == (0 + 4 + 10 + 2) * 3
 
 
 # ─── match_bonus ──────────────────────────────────────────────────────
@@ -207,7 +209,8 @@ def test_stoeck_on_sn_holds():
 
 
 def test_stoeck_on_ow_holds():
-    """``stoeck=True`` and one OW seat holds K+O of trump → (0, 20)."""
+    """``stoeck=True`` and one OW seat holds K+O of trump → 20 ×
+    Schilten multiplier (×2) = 40 OW."""
     s = _session(stoeck=True)
     play = Play(spiel=1)
     play.operator = "Schilten"
@@ -216,7 +219,7 @@ def test_stoeck_on_ow_holds():
         return hand is play.compe  # exactly one OW seat holds it
 
     with patch("ausbau.game_session.detect_stock", side_effect=fake_detect):
-        assert s._apply_stoeck(play) == (0, 20)
+        assert s._apply_stoeck(play) == (0, 40)
 
 
 def test_stoeck_off_no_bonus_even_when_holding():

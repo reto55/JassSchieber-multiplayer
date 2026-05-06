@@ -162,15 +162,33 @@ Broadcast: `weis_resolution { winning_team: 'sn' | 'ow' | 'tie', weis_by_positio
 
 ## Stöck — `detect_stock`, `_apply_stoeck` (variant-gated)
 
-Holding **König + Ober of the trump suit** in your starting hand: +20 to your team. Variant `stoeck` must be enabled. No-trump rounds (`Oben`/`Unten`) never award Stöck. Multiple seats can each award their own +20 (rare with one deck, but the code supports it). Applied **before** Weis phase, in `_run_spiel` step 3.
+Holding **König + Ober of the trump suit** in your starting hand: +20 to your team. Variant `stoeck` must be enabled. No-trump rounds (`Oben`/`Unten`) never award Stöck. Multiple seats can each award their own +20 (rare with one deck, but the code supports it). Applied **before** Weis phase, in `_run_spiel` step 3. The base value is then multiplied by the mode multiplier (see Multiplikator below).
+
+## Multiplikator — `_mode_multiplier(operator, *, trumpf_bock=False)`
+
+Single source of truth for the per-mode score multiplier. Every score-bearing site routes through this helper.
+
+| Operator | Multiplier | + `trumpf_bock` |
+|----------|-----------|-----------------|
+| `Eicheln`, `Rosen` | ×1 | ×5 |
+| `Schellen`, `Schilten` | ×2 | ×10 |
+| `Oben`, `Unten` | ×3 | ×3 (bock has no effect in no-trump) |
+
+Applied at:
+- `trick_points` — every trick total (uses `trumpf_bock`)
+- `describe_weis` — Weis points (Dreier 20, Vierter 50, Viererle 100; ignores `trumpf_bock`)
+- `_apply_stoeck` — Stöck +20 (ignores `trumpf_bock`)
+- `_run_spiel` — last-trick +5 bonus (ignores `trumpf_bock`)
+
+`_apply_match_bonus` is **not** multiplied — the +100 match bonus is a flat value.
 
 ## Variants — `ausbau/room.py::Variant`
 
 | Flag | Effect | Where applied |
 |------|--------|---------------|
-| `trumpf_bock` | Each trick total **× 5** in trump-mode rounds. Does **not** affect Weis or Stöck. No effect in Oben/Unten. | `trick_points` |
-| `match_bonus` | If one team wins all 9 tricks of a spiel: **+100** to that team. Mixed winners or fewer than 9 tricks recorded → 0. | `_apply_match_bonus` |
-| `stoeck` | König + Ober of trump in a hand → +20 to that team. Trump-mode rounds only. | `_apply_stoeck` |
+| `trumpf_bock` | Stacks ×5 on top of base mode multiplier in trump-mode rounds (so Eicheln/Rosen → ×5, Schellen/Schilten → ×10). Does **not** affect Weis, Stöck, or last-trick bonus. No effect in Oben/Unten. | `_mode_multiplier`, applied in `trick_points` |
+| `match_bonus` | If one team wins all 9 tricks of a spiel: **+100** to that team (flat, not multiplied). Mixed winners or fewer than 9 tricks recorded → 0. | `_apply_match_bonus` |
+| `stoeck` | König + Ober of trump in a hand → +20 (×mode multiplier) to that team. Trump-mode rounds only. | `_apply_stoeck` |
 
 ## Per-Spiel Scoring Flow — `_run_spiel`
 
@@ -182,9 +200,9 @@ In order:
 4. **Weis phase** — winning team's sum added.
 5. **9 tricks** via `_play_trick` loop:
    - Winner of each trick leads the next; `play.first` updated.
-   - Trick points = `trick_points(trick, operator, trumpf_bock=variant.trumpf_bock)`, added to winner's team total.
-   - **Last trick (#9): +5 to winner's team** (always; not variant-gated).
-6. **Match bonus** (variant-gated): +100 if all 9 went to one team.
+   - Trick points = `trick_points(trick, operator, trumpf_bock=variant.trumpf_bock)`, added to winner's team total. Already multiplied by mode multiplier (and ×5 if `trumpf_bock` in trump mode).
+   - **Last trick (#9): +5 × mode multiplier to winner's team** (always; not variant-gated). Bock does NOT apply.
+6. **Match bonus** (variant-gated, flat): +100 if all 9 went to one team. Not multiplied.
 7. `spiel_end` broadcast with deltas.
 
 After every spiel, `start_game` checks `check_game_end(point_sn, point_ow, end_game)`. On true, computes winner inline (`sn` / `ow` / `tie`) and broadcasts `game_end`.
