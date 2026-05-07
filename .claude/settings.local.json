@@ -32,7 +32,20 @@
       "Bash(git *)",
       "Bash(playwright install *)",
       "Bash(pip show *)",
-      "Skill(schedule)"
+      "Skill(schedule)",
+      "Bash(mkdir -p graphify-out)",
+      "Bash(/home/reto/anaconda3/bin/python3.13 -c \"import sys; open\\('graphify-out/.graphify_python', 'w'\\).write\\(sys.executable\\)\")",
+      "Bash(grep -rn \"last.trick\\\\|trick.*+ 5\\\\|+= 5\\\\|point.*5$\\\\|last.*bonus\" /mnt/archive/Dokumente/JassSchieber-multiplayer/tests/ --include=\"*.py\")",
+      "Bash(rsync -avzn --exclude-from=/tmp/rsync-exclude.txt -e ssh ./ reto@platzanu.ch:/home/reto/Dokumente/JassSchieber-multiplayer/)",
+      "Bash(rsync -avzn --exclude-from=/tmp/rsync-exclude.txt -e ssh ./ reto@mail:/home/reto/Dokumente/JassSchieber-multiplayer/)",
+      "Bash(ssh-keygen -f ~/.ssh/known_hosts -R mail)",
+      "Bash(rsync -avzn --exclude-from=/tmp/rsync-exclude.txt -e \"ssh -o StrictHostKeyChecking=accept-new\" ./ reto@mail:/home/reto/Dokumente/JassSchieber-multiplayer/)",
+      "Bash(rsync -avzn --exclude-from=/tmp/rsync-exclude.txt -e \"ssh -o BatchMode=yes\" ./ reto@mail:/home/reto/Dokumente/JassSchieber-multiplayer/)",
+      "Bash(rsync -avz --exclude-from=/tmp/rsync-exclude.txt -e \"ssh -o BatchMode=yes\" ./ reto@mail:/home/reto/Dokumente/JassSchieber-multiplayer/)",
+      "Bash(ssh -o BatchMode=yes reto@mail \"sudo -n systemctl restart jass.service 2>&1 && echo OK_RESTART\")",
+      "Bash(ssh -tt -o BatchMode=yes reto@mail \"sudo systemctl restart jass.service\")",
+      "Bash(kill 213409 213379)",
+      "Bash(ssh -o BatchMode=yes reto@mail 'sudo -n cp /home/reto/Dokumente/JassSchieber-multiplayer/deploy/jass.service /etc/systemd/system/jass.service 2>&1')"
     ]
   }
 }
