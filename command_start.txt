@@ -1,3 +1,6 @@
 cd ausbau
 
-python -m uvicorn server:app --reload --proxy-headers --forwarded-allow-ips="*"
+# Exactly ONE worker (-w 1): room state lives in-process (ROOMS dict + per-room
+# asyncio queues/events/game-loop task). Multiple workers each get their own ROOMS,
+# so a room created on one worker is invisible to the others -> "room not found".
+gunicorn server:app -k uvicorn.workers.UvicornWorker -w 1 -b 127.0.0.1:8000 --timeout 300 --forwarded-allow-ips="127.0.0.1"

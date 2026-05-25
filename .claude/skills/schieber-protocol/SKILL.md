@@ -189,13 +189,31 @@ For spectators (TV mode): `your_position: null`, `your_hand: null`, `players` li
 
 `spectator_count_changed` is broadcast to all seats + spectators whenever a spectator joins (`POST /rooms/{code}/spectate`) or leaves (`POST /rooms/{code}/leave-spectator`). Lobby clients use it to refresh the displayed spectator count without polling.
 
-### `error` (single seat only)
+### `error`
 
+Two distinct, mutually exclusive shapes. The presence of a `reason` field is what marks an `error` as **fatal/terminal**.
+
+**Validation error (non-fatal, single seat only)** — no `reason` field:
 ```json
 {"type": "error", "message": "card not in hand"}
 ```
 
-Sent only to the seat that triggered. Followed by re-send of the most-recent prompt to the same seat.
+Sent only to the seat that triggered (out-of-turn, card not in hand, spectator write, internal error). Followed by re-send of the most-recent prompt to the same seat. The socket stays open.
+
+**Fatal error (terminal, pre-close)** — carries a `reason` field:
+```json
+{"type": "error", "reason": "room_not_found", "message": "Dieser Raum existiert nicht mehr."}
+```
+
+Sent by `/ws/{code}` immediately **before** `websocket.close(code=1008, ...)`. There is NO prompt re-send — the socket closes right after. `reason` is one of exactly:
+
+| `reason` | When | `message` (German) |
+|----------|------|--------------------|
+| `"no_auth"` | No valid session/guest cookie | `Nicht angemeldet. Bitte lade die Seite neu.` |
+| `"room_not_found"` | `get_room(code)` returned `None` (expired/reaped/unknown code) | `Dieser Raum existiert nicht mehr.` |
+| `"no_seat_slot"` | Principal owns neither a seat nor a spectator slot in this room | `Kein freier Platz in diesem Raum.` |
+
+Rationale: Apache `mod_proxy_wstunnel` does not reliably forward the WS close *reason* to the browser, so the client cannot depend on `CloseEvent.reason` to distinguish a fatal room-gone close from a transient drop. The in-band `error` with `reason` gives the client a reliable signal to redirect (fatal) vs. auto-reconnect (transient). The `send_json` is wrapped in try/except so a send failure cannot crash the handler before the close.
 
 ### `room_resume` (reconnect / spectator attach)
 
@@ -267,6 +285,8 @@ The server attributes each message to the WS that sent it (= that seat). Validat
 
 **Ownership distinction:** Lost connection retains seat ownership (human can reclaim); explicit `/leave` call releases ownership (seat drops to AI immediately).
 
+**Fatal vs. transient close:** A `1008` close from `/ws/{code}` is always preceded by a fatal `error` (with `reason`, see the `error` section). The client must treat a close carrying one of those reasons as terminal (redirect, do not reconnect). Any other close (e.g. `1006` transient drop, gunicorn restart) has no preceding fatal `error` and is eligible for auto-reconnect, which restores state via `room_resume` on the seat-reclaim path.
+
 ## Invariants
 
 1. The server validates every client message against the current game state. Out-of-turn or invalid messages return `error` on the same seat's WS only, followed by re-send of the most-recent prompt.
@@ -274,6 +294,7 @@ The server attributes each message to the WS that sent it (= that seat). Validat
 3. Lifecycle events (`seat_paused`, `seat_reclaimed`, `seat_ai_takeover`, `host_changed`, etc.) broadcast to all seats + spectators.
 4. The 60 s reconnect grace fires only on lost connections, not on explicit `/leave` calls.
 5. After AI-takeover, the seat retains its `principal` so the original human can reclaim by reconnecting to `/ws/{code}`.
+6. Every fatal `1008` close from `/ws/{code}` is preceded by an `error` carrying a `reason` (`no_auth` | `room_not_found` | `no_seat_slot`); a validation `error` never carries `reason` and never precedes a close.
 
 ## When to Update This Skill
 

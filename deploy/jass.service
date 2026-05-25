@@ -8,15 +8,21 @@ After=network.target
 User=reto
 Group=reto
 
-# The working directory where the project is located.
+# The working directory where the project is located. Set to this checkout;
+# VERIFY it matches the directory your production server actually runs from
+# before enabling this unit.
 WorkingDirectory=/home/reto/Dokumente/JassSchieber-multiplayer
 
-# Start Uvicorn pointing to the FastAPI app.
+# Start gunicorn with the UvicornWorker, pointing to the FastAPI app.
 # By default, we run on 127.0.0.1:8000 so it is not exposed publicly,
 # only the Apache proxy can access it.
-ExecStart=/home/reto/Dokumente/JassSchieber-multiplayer/.venv/bin/uvicorn ausbau.server:app --host 127.0.0.1 --port 8000 --proxy-headers --forwarded-allow-ips=*
-# Note: If you're not using a virtual environment in .venv, change the path above to just `uvicorn`
-# or the absolute path to your global uvicorn installation.
+# Exactly ONE worker (-w 1): room state lives in-process (ROOMS dict + per-room
+# asyncio queues/events/game-loop task). Multiple workers each get their own
+# ROOMS, so a room created on one worker is invisible to the others -> "room not
+# found". One async UvicornWorker handles all WebSockets + HTTP for this game.
+ExecStart=/home/reto/Dokumente/JassSchieber-multiplayer/.venv/bin/gunicorn ausbau.server:app -k uvicorn.workers.UvicornWorker -w 1 -b 127.0.0.1:8000 --timeout 300 --forwarded-allow-ips="127.0.0.1"
+# Note: If you're not using a virtual environment in .venv, change the path above to just `gunicorn`
+# or the absolute path to your global gunicorn installation.
 
 Restart=always
 RestartSec=5

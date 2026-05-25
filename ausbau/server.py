@@ -21,6 +21,7 @@ from frontend.auth.settings import load_settings
 from frontend.auth.app import build_app
 from frontend.auth.email import ConsoleMailBackend, SmtpMailBackend
 from ausbau.game_session import GameSession
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
@@ -46,16 +47,8 @@ app = FastAPI(lifespan=_lifespan)
 # proxy → uvicorn) and for local development. allow_credentials=True is
 # required so the auth/guest cookies travel with cross-origin requests.
 app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "https://platzanu.ch",
-        "https://www.platzanu.ch",
-        "http://localhost:8765",
-        "http://127.0.0.1:8765",
-    ],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    ProxyHeadersMiddleware,
+    trusted_hosts="*"
 )
 
 # Initialise auth engine for principal lookup. Done lazily so that running tests
@@ -106,7 +99,6 @@ _BASE = os.path.dirname(os.path.abspath(__file__))
 _HTML5 = os.path.join(_BASE, "html5")
 
 app.mount("/static", StaticFiles(directory=_HTML5), name="static")
-
 
 @app.get("/")
 def index(request: Request):
@@ -755,12 +747,31 @@ async def websocket_endpoint(websocket: WebSocket, code: str):
                 pass
 
     if principal is None:
+        # Send an in-band fatal error before closing: Apache mod_proxy_wstunnel
+        # does not reliably forward the WS close reason, so the client relies on
+        # this `error` (with `reason`) to distinguish a fatal close from a drop.
+        try:
+            await websocket.send_json({
+                "type": "error",
+                "reason": "no_auth",
+                "message": "Nicht angemeldet. Bitte lade die Seite neu.",
+            })
+        except Exception:
+            pass
         await websocket.close(code=1008, reason="no auth cookie")
         return
 
     # Find room
     room = get_room(code)
     if room is None:
+        try:
+            await websocket.send_json({
+                "type": "error",
+                "reason": "room_not_found",
+                "message": "Dieser Raum existiert nicht mehr.",
+            })
+        except Exception:
+            pass
         await websocket.close(code=1008, reason="room not found")
         return
 
@@ -774,6 +785,14 @@ async def websocket_endpoint(websocket: WebSocket, code: str):
         spec.websocket = websocket
         await websocket.send_json(room._room_resume_message_for(None))
     else:
+        try:
+            await websocket.send_json({
+                "type": "error",
+                "reason": "no_seat_slot",
+                "message": "Kein freier Platz in diesem Raum.",
+            })
+        except Exception:
+            pass
         await websocket.close(code=1008, reason="no seat or spectator slot")
         return
 

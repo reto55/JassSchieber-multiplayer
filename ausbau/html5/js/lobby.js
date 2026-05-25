@@ -58,6 +58,20 @@ async function refreshMembership() {
   }
 }
 
+function roomGone(err) {
+  // `api()` prefixes the HTTP status, so a missing room surfaces as
+  // "404: room not found". Match on either signal.
+  const m = (err && err.message) || '';
+  return m.startsWith('404') || m.toLowerCase().includes('room not found');
+}
+
+function showRoomGone() {
+  $error.textContent = '';
+  $error.innerHTML =
+    'Dieser Raum existiert nicht mehr — er wurde evtl. beendet oder ist abgelaufen. ' +
+    '<a href="/home">Zur Startseite</a>';
+}
+
 async function refresh() {
   $error.textContent = '';
   try {
@@ -67,7 +81,11 @@ async function refresh() {
     ]);
     render();
   } catch (err) {
-    $error.textContent = err.message;
+    if (roomGone(err)) {
+      showRoomGone();
+    } else {
+      $error.textContent = err.message;
+    }
   }
 }
 

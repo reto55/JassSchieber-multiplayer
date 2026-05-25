@@ -82,9 +82,60 @@ const state = {
 
 let ws = null;
 
+// Reconnect / shutdown bookkeeping.
+//   intentionalClose — user navigated away or a fatal close was handled;
+//                       suppresses auto-reconnect.
+//   reconnectAttempt — exponential-backoff counter; reset on a clean onopen.
+//   fatalReason      — set from an in-band {type:"error", reason:...} message
+//                      (the FATAL set the server sends right before close 1008).
+const FATAL_REASONS = new Set(['room_not_found', 'no_seat_slot', 'no_auth']);
+const RECONNECT_MAX_ATTEMPTS = 6;
+let intentionalClose = false;
+let reconnectAttempt = 0;
+let fatalReason = null;
+let reconnectTimer = null;
+
 function wsUrl() {
   const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
   return `${proto}://${window.location.host}/ws/${ROOM_CODE}`;
+}
+
+// WHY fatal-vs-transient: Apache's mod_proxy_wstunnel does not reliably forward
+// the WS close *reason* string to the browser, so we cannot trust
+// CloseEvent.reason. The server therefore sends an in-band
+// {type:"error", reason:<R>} just before close(1008). We treat a connection as
+// fatal (redirect, no reconnect) when that reason is in FATAL_REASONS or the
+// close code is 1008; everything else (1006/1001/1011/server restart) is
+// transient and auto-reconnects with backoff.
+function handleFatalError(reason, message) {
+  fatalReason = reason;
+  intentionalClose = true;
+  appendLog(message || 'Verbindung abgelehnt.', 'error');
+  if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+}
+
+function fatalRedirect(reason) {
+  if (reason === 'no_seat_slot') {
+    window.location.href = '/lobby?code=' + encodeURIComponent(ROOM_CODE || '');
+  } else {
+    // room_not_found / no_auth / anything else fatal → home.
+    window.location.href = '/home';
+  }
+}
+
+function scheduleReconnect() {
+  if (reconnectAttempt >= RECONNECT_MAX_ATTEMPTS) {
+    appendLog('Verbindung verloren — bitte Seite neu laden.', 'error');
+    return;
+  }
+  const delay = Math.min(1000 * Math.pow(2, reconnectAttempt), 10000);
+  reconnectAttempt += 1;
+  appendLog(
+    `Verbindung getrennt — neuer Versuch in ${Math.round(delay / 1000)}s ` +
+    `(${reconnectAttempt}/${RECONNECT_MAX_ATTEMPTS})…`,
+    'error'
+  );
+  reconnectTimer = setTimeout(() => { reconnectTimer = null; connect(); }, delay);
 }
 
 function connect() {
@@ -94,7 +145,10 @@ function connect() {
     return;
   }
   ws = new WebSocket(wsUrl());
-  ws.onopen = () => appendLog(`Verbunden mit Raum ${ROOM_CODE}.`);
+  ws.onopen = () => {
+    reconnectAttempt = 0;
+    appendLog(`Verbunden mit Raum ${ROOM_CODE}.`);
+  };
   ws.onmessage = (e) => {
     let msg = null;
     try { msg = JSON.parse(e.data); } catch (_) {
@@ -103,9 +157,24 @@ function connect() {
     }
     dispatch(msg);
   };
-  ws.onclose = () => appendLog('Verbindung getrennt.', 'error');
+  ws.onclose = (event) => {
+    if (intentionalClose || fatalReason || (event && event.code === 1008)) {
+      // Fatal close (or user-initiated): show message + redirect, never reconnect.
+      const reason = fatalReason || 'room_not_found';
+      if (!intentionalClose || fatalReason) {
+        // A 1008 without an in-band reason still redirects (default: home).
+        fatalRedirect(reason);
+      }
+      return;
+    }
+    // Transient/abnormal drop → auto-reconnect with backoff.
+    scheduleReconnect();
+  };
   ws.onerror = () => appendLog('Verbindungsfehler.', 'error');
 }
+
+// Navigating away should not trigger reconnect noise.
+window.addEventListener('beforeunload', () => { intentionalClose = true; });
 
 function send(msg) {
   if (ws && ws.readyState === WebSocket.OPEN) {
@@ -768,6 +837,13 @@ function onSeatSwapExpired(msg) {
 }
 
 function onError(msg) {
+  // FATAL errors carry a `reason` (room_not_found / no_seat_slot / no_auth) and
+  // arrive just before the server closes with 1008. Ordinary in-game validation
+  // errors have NO `reason` field — those just shake the hand.
+  if (msg && FATAL_REASONS.has(msg.reason)) {
+    handleFatalError(msg.reason, msg.message);
+    return;
+  }
   appendLog(`Fehler: ${msg.message || '(unbekannt)'}`, 'error');
   // Visual shake of hand cards if we mis-played.
   const handEl = document.getElementById('hand-cards');
