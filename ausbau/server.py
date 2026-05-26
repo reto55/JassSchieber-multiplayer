@@ -807,6 +807,9 @@ async def websocket_endpoint(websocket: WebSocket, code: str):
                     current_seat = room._seat_for_principal(principal)
                     name = current_seat.display_name() if current_seat else "?"
                     pos  = current_seat.position if current_seat else None
+                    import sys as _sys
+                    print(f"[chat] room={room.code} from={pos}/{name!r}: {text!r}",
+                          file=_sys.stderr, flush=True)
                     await room.broadcast({
                         "type": "chat_message",
                         "from_position": pos,

@@ -110,9 +110,27 @@ function escapeHtml(s) {
   }[c]));
 }
 
+async function fetchActiveRoom() {
+  try {
+    const rooms = await api('/rooms/mine');
+    if (!rooms || rooms.length === 0) return;
+    const room = rooms[0];
+    const banner = document.getElementById('active-room');
+    const text   = document.getElementById('active-room-text');
+    const link   = document.getElementById('active-room-link');
+    if (!banner || !text || !link) return;
+    text.textContent = `Active room: ${room.code}`;
+    link.href = `/lobby?code=${room.code}`;
+    banner.hidden = false;
+  } catch (_) {
+    // Not signed in or no rooms — silently ignore.
+  }
+}
+
 // ─── Initialization ───────────────────────────────────────────────────────────
 
 $btnCreate.addEventListener('click', handleCreateRoom);
 $formJoin.addEventListener('submit', handleJoinRoom);
 
 bootAuth();
+fetchActiveRoom();
