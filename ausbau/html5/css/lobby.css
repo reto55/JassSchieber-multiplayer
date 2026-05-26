@@ -75,3 +75,27 @@ section h2, section h3 { margin: 0 0 0.5rem 0; }
 .spectators, .state-info { font-size: 0.9rem; color: #555; }
 
 #error { color: #b00; min-height: 1.2em; margin-top: 0.5rem; }
+
+/* Chat section */
+.chat #chat-messages {
+  height: 150px; overflow-y: auto;
+  border: 1px solid #ddd; border-radius: 4px;
+  padding: 6px 8px; background: #fafafa;
+  display: flex; flex-direction: column; gap: 3px;
+  font-size: 0.85rem;
+}
+.chat .chat-entry { word-break: break-word; line-height: 1.4; }
+.chat .chat-sender { font-weight: 600; }
+.chat #chat-input-area {
+  display: flex; gap: 6px; margin-top: 6px;
+}
+.chat #chat-input {
+  flex: 1; padding: 0.4rem 0.6rem;
+  border: 1px solid #888; border-radius: 4px; font-size: 0.9rem;
+}
+.chat #chat-send {
+  padding: 0.4rem 0.8rem; cursor: pointer;
+  border: 1px solid #888; border-radius: 4px;
+  background: #f6f6f6;
+}
+.chat #chat-send:hover { background: #ececec; }

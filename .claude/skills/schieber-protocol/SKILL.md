@@ -241,6 +241,24 @@ For a spectator: `your_position: null`, `your_hand: null`, `your_turn: null`.
 
 `missed_tricks` includes up to 3 most-recent completed tricks.
 
+### `chat_message` (broadcast)
+
+Sent to all seats **and** spectators whenever a seated player sends a chat message.
+Spectators receive it but cannot send chat (their WS is write-protected).
+
+```json
+{
+  "type": "chat_message",
+  "from_position": "comps",
+  "from_name": "alice",
+  "text": "Schönes Spiel!"
+}
+```
+
+`from_position` is the sender's seat position (`"compo"` / `"compn"` / `"compe"` / `"comps"`).
+`from_name` is `seat.display_name()` — the human's username/display name, or `"AI (position)"`.
+`text` is server-truncated to 200 characters and stripped of leading/trailing whitespace.
+
 ## Client → Server Messages
 
 Same shape as today's single-WS protocol:
@@ -250,6 +268,13 @@ Same shape as today's single-WS protocol:
 {"type": "schieben"}
 {"type": "play_card", "card": "E6"}
 ```
+
+**Chat** (seated players only; intercepted before the phase queue):
+```json
+{"type": "chat", "text": "Guet Glück!"}
+```
+
+Server broadcasts a `chat_message` to all seats + spectators. Spectators who attempt to send any message still receive `{"type": "error", "message": "spectators are read-only"}`.
 
 `announce_weis` — reply to a `weis_request`:
 ```json

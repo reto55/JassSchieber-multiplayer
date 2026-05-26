@@ -800,6 +800,20 @@ async def websocket_endpoint(websocket: WebSocket, code: str):
     try:
         while True:
             msg = await websocket.receive_json()
+            # Chat is intercepted here (pre-queue) so it works in lobby and in-game.
+            if msg.get("type") == "chat":
+                text = str(msg.get("text", "")).strip()[:200]
+                if text and seat is not None:
+                    current_seat = room._seat_for_principal(principal)
+                    name = current_seat.display_name() if current_seat else "?"
+                    pos  = current_seat.position if current_seat else None
+                    await room.broadcast({
+                        "type": "chat_message",
+                        "from_position": pos,
+                        "from_name": name,
+                        "text": text,
+                    })
+                continue
             if seat is not None:
                 # Re-resolve seat in case position changed (mid-game swap)
                 current_seat = room._seat_for_principal(principal)

@@ -197,6 +197,13 @@ function sendAnnounceWeis(announce, weisNames) {
 function sendPlayCard(code) {
   send({ type: 'play_card', card: code });
 }
+function sendChatMessage() {
+  const input = document.getElementById('chat-input');
+  const text = (input.value || '').trim();
+  if (!text) return;
+  send({ type: 'chat', text });
+  input.value = '';
+}
 
 // ─── Dispatch ─────────────────────────────────────────────────────────────────
 
@@ -224,6 +231,7 @@ const handlers = {
   seat_swap_committed: onSeatSwapCommitted,
   seat_swap_expired: onSeatSwapExpired,
   error: onError,
+  chat_message: onChatMessage,
 };
 
 function dispatch(msg) {
@@ -853,6 +861,25 @@ function onError(msg) {
     handEl.classList.add('shake');
   }
 }
+
+// ─── Chat ─────────────────────────────────────────────────────────────────────
+
+function onChatMessage(msg) {
+  const box = document.getElementById('chat-messages');
+  if (!box) return;
+  const div = document.createElement('div');
+  div.className = 'chat-entry';
+  div.innerHTML = `<span class="chat-sender">${escapeHtml(msg.from_name)}:</span> ${escapeHtml(msg.text)}`;
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+}
+
+const $chatSend = document.getElementById('chat-send');
+const $chatInput = document.getElementById('chat-input');
+if ($chatSend) $chatSend.addEventListener('click', sendChatMessage);
+if ($chatInput) $chatInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); sendChatMessage(); }
+});
 
 // ─── Card play action ─────────────────────────────────────────────────────────
 

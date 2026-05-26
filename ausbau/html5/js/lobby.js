@@ -230,8 +230,46 @@ function openWs() {
   ws.addEventListener('error', () => { /* surfaced via close */ });
 }
 
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function appendChatMessage(fromName, text) {
+  const box = document.getElementById('chat-messages');
+  if (!box) return;
+  const div = document.createElement('div');
+  div.className = 'chat-entry';
+  div.innerHTML = `<span class="chat-sender">${escapeHtml(fromName)}:</span> ${escapeHtml(text)}`;
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+}
+
+function sendChatMessage() {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  const input = document.getElementById('chat-input');
+  const text = (input.value || '').trim();
+  if (!text) return;
+  ws.send(JSON.stringify({ type: 'chat', text }));
+  input.value = '';
+}
+
+const $chatSend = document.getElementById('chat-send');
+const $chatInput = document.getElementById('chat-input');
+if ($chatSend) $chatSend.addEventListener('click', sendChatMessage);
+if ($chatInput) $chatInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); sendChatMessage(); }
+});
+
 function handleWsMessage(msg) {
   if (!msg || !msg.type) return;
+  if (msg.type === 'chat_message') {
+    appendChatMessage(msg.from_name || '?', msg.text || '');
+    return;
+  }
   // Lobby-relevant lifecycle events: refresh state.
   // These are the ACTUAL event names the server emits (per the
   // schieber-protocol skill).  An earlier draft listened on
