@@ -249,7 +249,10 @@ function appendChatMessage(fromName, text) {
 }
 
 function sendChatMessage() {
-  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  if (!ws || ws.readyState !== WebSocket.OPEN) {
+    $error.textContent = 'Keine WS-Verbindung (ws=' + (ws ? ws.readyState : 'null') + ')';
+    return;
+  }
   const input = document.getElementById('chat-input');
   const text = (input.value || '').trim();
   if (!text) return;

@@ -779,6 +779,14 @@ async def websocket_endpoint(websocket: WebSocket, code: str):
     seat = room._seat_for_principal(principal)
     spec = room._spectator_for_principal(principal)
 
+    import sys as _sys
+    from ausbau.room import principal_id as _pid
+    _who = _pid(principal)
+    print(f"[ws] connect code={code} principal={_who!r} "
+          f"seat={seat.position if seat else None} "
+          f"spec={'yes' if spec else None} state={room.state}",
+          file=_sys.stderr, flush=True)
+
     if seat is not None:
         await room._reclaim_seat(seat.position, websocket, principal)
     elif spec is not None:
@@ -796,6 +804,8 @@ async def websocket_endpoint(websocket: WebSocket, code: str):
         await websocket.close(code=1008, reason="no seat or spectator slot")
         return
 
+    print(f"[ws] reader loop start code={code} principal={_who!r}",
+          file=_sys.stderr, flush=True)
     # WS reader loop: dequeue and route to seat's queue
     try:
         while True:
