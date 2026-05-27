@@ -78,6 +78,159 @@ def test_valid_cards_any_trump_always_playable():
     assert 'R6' in codes  # non-Under trumps are now also always valid
 
 
+# ── House rules: Under-holdback, trump-always-playable, no-undertrumping ──
+# These apply ONLY in the four trump modes (Eicheln/Rosen/Schellen/Schilten).
+# `trick_so_far` is the engine shape: [{"position","card"}, ...] of CODES.
+
+
+def test_underholdback_trump_led_only_under_any_card():
+    """Rule 1: trump led, player's ONLY trump is the trump Under → any card."""
+    hand = {suit: [] for suit in SUITS}
+    hand['Rosen'] = [Under(6, 'Rosen')]                 # Rosen trump, sole trump
+    hand['Eicheln'] = [Ass(9, 'Eicheln'), Sechs(1, 'Eicheln')]
+    codes = get_valid_cards(hand, 'Rosen', 'Rosen')
+    assert set(codes) == {'RU', 'EA', 'E6'}            # Under not forced
+
+
+def test_underholdback_trump_led_under_plus_other_trump_must_follow():
+    """Rule 1 boundary: Under + another trump → must follow with a trump
+    (Under stays optional among them)."""
+    hand = {suit: [] for suit in SUITS}
+    hand['Rosen'] = [Under(6, 'Rosen'), Koenig(8, 'Rosen')]
+    hand['Eicheln'] = [Ass(9, 'Eicheln')]
+    codes = get_valid_cards(hand, 'Rosen', 'Rosen')
+    assert set(codes) == {'RU', 'RK'}                  # only trumps, EA excluded
+
+
+def test_trump_led_no_trump_any_card():
+    """Trump led, no trump at all → any card (can't follow)."""
+    hand = {suit: [] for suit in SUITS}
+    hand['Eicheln'] = [Ass(9, 'Eicheln')]
+    hand['Schellen'] = [Sechs(1, 'Schellen')]
+    codes = get_valid_cards(hand, 'Rosen', 'Rosen')
+    assert set(codes) == {'EA', 'SE6'}
+
+
+def test_nontrump_led_no_trump_played_may_follow_or_trump():
+    """Rule 2: non-trump led, no trump yet in trick → follow OR any trump."""
+    hand = {suit: [] for suit in SUITS}
+    hand['Eicheln'] = [Ass(9, 'Eicheln')]              # can follow Eicheln lead
+    hand['Rosen'] = [Under(6, 'Rosen'), Sechs(1, 'Rosen')]   # Rosen trump
+    codes = get_valid_cards(hand, 'Eicheln', 'Rosen', trick_so_far=[
+        {"position": "comps", "card": "EK"},
+    ])
+    assert set(codes) == {'EA', 'RU', 'R6'}            # any trump still allowed
+
+
+def test_no_undertrumping_with_nontrump_in_hand():
+    """Rule 3: non-trump led, trump already played, holding higher+lower trump
+    AND a non-trump → valid = follow/discards + higher trump only."""
+    hand = {suit: [] for suit in SUITS}
+    # Rosen is trump. Trump strengths: Under=18, Neun=17, Banner=13, Sechs=10.
+    hand['Rosen'] = [Banner(5, 'Rosen'), Sechs(1, 'Rosen')]  # one higher, one lower
+    hand['Eicheln'] = [Koenig(8, 'Eicheln')]               # non-trump discard
+    # An Ober of Rosen (trumpf=14) already in the trick on an Eicheln lead.
+    trick = [
+        {"position": "compe", "card": "EA"},               # lead (Eicheln)
+        {"position": "compn", "card": "RO"},               # Ober of Rosen, trumpf=14
+    ]
+    codes = get_valid_cards(hand, 'Eicheln', 'Rosen', trick_so_far=trick)
+    # Player CAN follow the Eicheln lead with EK, so EK is valid. The trump
+    # restriction applies to the trumps in hand: only an over-trump is allowed.
+    assert 'EK' in codes        # can follow Eicheln lead
+    assert 'R6' not in codes    # Sechs (10) does NOT beat Ober (14) — undertrump
+    assert 'RU' not in codes    # not in hand
+    # Banner(13) also does NOT beat Ober(14) — so no overtrump available here.
+    assert 'RB' not in codes
+
+
+def test_no_undertrumping_overtrump_allowed():
+    """Rule 3: a trump that DOES beat the highest played trump is allowed."""
+    hand = {suit: [] for suit in SUITS}
+    hand['Rosen'] = [Under(6, 'Rosen'), Sechs(1, 'Rosen')]  # Under=18 beats Ober=14
+    hand['Eicheln'] = [Koenig(8, 'Eicheln')]
+    trick = [
+        {"position": "compe", "card": "EA"},
+        {"position": "compn", "card": "RO"},               # Ober Rosen, 14
+    ]
+    codes = get_valid_cards(hand, 'Eicheln', 'Rosen', trick_so_far=trick)
+    assert 'EK' in codes        # follow the lead
+    assert 'RU' in codes        # over-trump allowed (18 > 14)
+    assert 'R6' not in codes    # under-trump forbidden (10 < 14)
+
+
+def test_no_undertrumping_must_beat_highest_of_multiple_trumps():
+    """Rule 3 with MULTIPLE trumps already played: the bar is the HIGHEST
+    trump in the trick, not the most-recently-played one. A low trump and a
+    middle trump are down; the player must over-trump the middle (highest),
+    so a trump above it is valid, a trump below it (even though it beats the
+    earlier low trump) is NOT, and the non-trump discard is valid."""
+    hand = {suit: [] for suit in SUITS}
+    # Rosen trump. Player holds Banner(13, BELOW highest) + Under(18, ABOVE
+    # highest) + a non-trump discard (Eicheln Sechs).
+    hand['Rosen'] = [Banner(5, 'Rosen'), Under(6, 'Rosen')]
+    hand['Eicheln'] = [Sechs(1, 'Eicheln')]                # non-trump discard
+    # Schellen led; player cannot follow. Two trumps already on the table:
+    # Sechs (10, low) then Koenig (15, middle = current highest).
+    trick = [
+        {"position": "compe", "card": "SEK"},              # Schellen lead
+        {"position": "compn", "card": "R6"},               # low trump, 10
+        {"position": "comps", "card": "RK"},               # middle trump, 15 (highest)
+    ]
+    codes = get_valid_cards(hand, 'Schellen', 'Rosen', trick_so_far=trick)
+    assert set(codes) == {'RU', 'E6'}                      # over-trump + discard
+    assert 'RU' in codes        # Under (18) beats the highest played (15)
+    assert 'E6' in codes        # non-trump discard always allowed
+    assert 'RB' not in codes    # Banner (13) < highest played (15) — undertrump
+
+
+def test_all_trump_hand_forced_undertrump_allowed():
+    """Rule 3 exception: whole hand is trumps incl. only lower trumps → all
+    trumps valid (forced undertrump)."""
+    hand = {suit: [] for suit in SUITS}
+    # Rosen trump; player holds ONLY low trumps, no non-trump anywhere.
+    hand['Rosen'] = [Sieben(2, 'Rosen'), Sechs(1, 'Rosen')]  # trumpf 11 and 10
+    trick = [
+        {"position": "compe", "card": "EA"},               # Eicheln lead
+        {"position": "compn", "card": "RO"},               # Ober Rosen, 14
+    ]
+    codes = get_valid_cards(hand, 'Eicheln', 'Rosen', trick_so_far=trick)
+    assert set(codes) == {'R7', 'R6'}                      # forced, undertrump ok
+
+
+def test_no_undertrump_discard_nontrump_when_cant_overtrump():
+    """Non-trump led, can't follow, trump already played, only lower trumps,
+    but a non-trump exists → must discard non-trump (no undertrump)."""
+    hand = {suit: [] for suit in SUITS}
+    hand['Rosen'] = [Sechs(1, 'Rosen')]                    # low trump, 10
+    hand['Schellen'] = [Koenig(8, 'Schellen')]             # non-trump, can't follow
+    trick = [
+        {"position": "compe", "card": "EA"},               # Eicheln lead
+        {"position": "compn", "card": "RO"},               # Ober Rosen, 14
+    ]
+    codes = get_valid_cards(hand, 'Eicheln', 'Rosen', trick_so_far=trick)
+    assert set(codes) == {'SEK'}                           # discard, no undertrump
+
+
+def test_oben_mode_unaffected_must_follow():
+    """Rule f: Oben/Unten unaffected — must follow if able, trump rules N/A."""
+    hand = {suit: [] for suit in SUITS}
+    hand['Eicheln'] = [Ass(9, 'Eicheln')]
+    hand['Rosen'] = [Koenig(8, 'Rosen')]
+    codes = get_valid_cards(hand, 'Eicheln', 'Oben', trick_so_far=[
+        {"position": "compe", "card": "EK"},
+    ])
+    assert codes == ['EA']                                 # must follow, no trump rule
+
+
+def test_unten_mode_cant_follow_any_card():
+    """Unten: can't follow → any card."""
+    hand = {suit: [] for suit in SUITS}
+    hand['Schellen'] = [Koenig(8, 'Schellen')]
+    codes = get_valid_cards(hand, 'Eicheln', 'Unten')
+    assert set(codes) == {'SEK'}
+
+
 def test_trick_winner_trump_beats_lead():
     folger = {'comps': 'compo', 'compo': 'compn', 'compn': 'compe', 'compe': 'comps'}
     trick = {

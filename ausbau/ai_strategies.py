@@ -13,24 +13,6 @@ from typing import Optional
 TRUMP_OPTIONS = ("Eicheln", "Rosen", "Schellen", "Schilten", "Oben", "Unten")
 
 
-# Inverse of game_session.SUIT_PREFIX. Two-letter prefixes (`SE`, `SI`)
-# come first in iteration so they're matched before single-letter `S`.
-INVERSE_SUIT_PREFIX = {
-    "SE": "Schellen",
-    "SI": "Schilten",
-    "E": "Eicheln",
-    "R": "Rosen",
-}
-
-
-def _split_code(code: str) -> tuple[str, str]:
-    """Return (suit_name, rank_suffix). 'SEK' → ('Schellen', 'K')."""
-    for prefix in ("SE", "SI", "E", "R"):
-        if code.startswith(prefix):
-            return INVERSE_SUIT_PREFIX[prefix], code[len(prefix):]
-    raise ValueError(f"bad card code: {code!r}")
-
-
 class AIStrategy:
     """Abstract base. Subclasses override pick_trump / pick_card.
 
@@ -68,7 +50,9 @@ class EasyStrategy(AIStrategy):
     def pick_card(self, play, lead_suit, trick_so_far) -> dict:
         from ausbau.game_session import get_valid_cards
         hand = getattr(play, self.position)
-        valid = get_valid_cards(hand, lead_suit, play.operator)
+        valid = get_valid_cards(
+            hand, lead_suit, play.operator, trick_so_far=trick_so_far,
+        )
         return {"type": "play_card", "card": random.choice(valid)}
 
 
@@ -83,7 +67,9 @@ class MediumStrategy(AIStrategy):
     def pick_card(self, play, lead_suit, trick_so_far) -> dict:
         from ausbau.game_session import ai_select_card, card_to_code
         hand = getattr(play, self.position)
-        card = ai_select_card(hand, lead_suit, play.operator)
+        card = ai_select_card(
+            hand, lead_suit, play.operator, trick_so_far=trick_so_far,
+        )
         return {"type": "play_card", "card": card_to_code(card)}
 
 
@@ -113,9 +99,10 @@ class HardStrategy(AIStrategy):
         """Remove a played card from tracking. No-op for own plays or unknowns."""
         if player_position == self.position:
             return
+        from ausbau.game_session import code_to_card
         try:
-            suit, _ = _split_code(card_code)
-        except ValueError:
+            suit = code_to_card(card_code).suit
+        except (ValueError, KeyError):
             return
         self._remaining_by_suit.get(suit, set()).discard(card_code)
 
@@ -180,18 +167,10 @@ class HardStrategy(AIStrategy):
         if not remaining_codes:
             return True  # No competing cards exist anywhere.
         # Reconstruct strengths for remaining codes vs ours.
-        from Cards_refactored import create_card
-        from ausbau.game_session import RANK_SUFFIX
-        inverse_rank = {v: k for k, v in RANK_SUFFIX.items()}
+        from ausbau.game_session import code_to_card
         my_strength = self._strength(card_obj, play.operator, lead_suit=card_obj.suit)
         for code in remaining_codes:
-            if code == f"{card_obj.suit}":  # safety
-                continue
-            # Strip suit prefix to get rank
-            from ausbau.ai_strategies import _split_code
-            _, rank_suffix = _split_code(code)
-            rank = inverse_rank[rank_suffix]
-            other = create_card(rank, card_obj.suit)
+            other = code_to_card(code)
             other_strength = self._strength(other, play.operator, lead_suit=card_obj.suit)
             if other_strength > my_strength:
                 return False
@@ -202,7 +181,9 @@ class HardStrategy(AIStrategy):
             get_valid_cards, find_card_in_hand, card_to_code,
         )
         hand = getattr(play, self.position)
-        valid_codes = get_valid_cards(hand, lead_suit, play.operator)
+        valid_codes = get_valid_cards(
+            hand, lead_suit, play.operator, trick_so_far=trick_so_far,
+        )
         valid_cards = [find_card_in_hand(c, hand)[0] for c in valid_codes]
 
         # ── Leading ─────────────────────────────────────────────────────────
@@ -225,18 +206,10 @@ class HardStrategy(AIStrategy):
         partner_winning = (winner_position == partner_position)
 
         # Sum points already on the table.
-        from ausbau.game_session import find_card_in_hand, card_to_code
-        from Cards_refactored import create_card
-        from ausbau.game_session import RANK_SUFFIX
-        inverse_rank = {v: k for k, v in RANK_SUFFIX.items()}
-
-        def _code_to_card(code):
-            from ausbau.ai_strategies import _split_code
-            suit, rank_suffix = _split_code(code)
-            return create_card(inverse_rank[rank_suffix], suit)
+        from ausbau.game_session import code_to_card, card_to_code
 
         trick_total = sum(
-            self._card_value(_code_to_card(p["card"]), operator) for p in played
+            self._card_value(code_to_card(p["card"]), operator) for p in played
         )
 
         # Stable "lowest" key: point value first, then rank — so that when
@@ -250,7 +223,7 @@ class HardStrategy(AIStrategy):
             return {"type": "play_card", "card": card_to_code(pick)}
 
         # Opponent winning. Try to beat cheaply.
-        winning_card = _code_to_card(
+        winning_card = code_to_card(
             next(p["card"] for p in played if p["position"] == winner_position)
         )
         winning_strength = self._strength(winning_card, operator, lead_suit)
@@ -297,21 +270,14 @@ class HardStrategy(AIStrategy):
         """Return position of the current trick winner among `played`. None if empty."""
         if not played:
             return None
-        from Cards_refactored import create_card
-        from ausbau.game_session import RANK_SUFFIX
-        from ausbau.ai_strategies import _split_code
-        inverse_rank = {v: k for k, v in RANK_SUFFIX.items()}
+        from ausbau.game_session import code_to_card
 
-        def _to_card(code):
-            suit, rank_suffix = _split_code(code)
-            return create_card(inverse_rank[rank_suffix], suit)
-
-        lead_card = _to_card(played[0]["card"])
+        lead_card = code_to_card(played[0]["card"])
         lead_suit = lead_card.suit
         winner = played[0]["position"]
         best = self._strength(lead_card, operator, lead_suit)
         for entry in played[1:]:
-            c = _to_card(entry["card"])
+            c = code_to_card(entry["card"])
             s = self._strength(c, operator, lead_suit)
             if s > best:
                 best = s

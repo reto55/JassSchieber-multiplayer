@@ -114,15 +114,40 @@ Highest tuple wins. Tuple ordering means trumps always beat off-suit (group 2 vs
 
 ## Following Suit — `ausbau/game_session.py::get_valid_cards`
 
-Rules actually enforced:
+Signature: `get_valid_cards(hand, lead_suit, operator, trick_so_far=None)`.
+`trick_so_far` is the list of cards already played this trick — accepted as
+CODE strings, `Card`s, or the engine's `{"position","card"}` dicts (`card` =
+code). It is consulted only in trump modes, to enforce no-undertrumping.
 
-1. If lead is non-trump and you have ≥1 card in the lead suit, you must play a lead-suit card **OR** any trump card.
-2. In a trump game, **any trump card** is always valid — even when you could follow a non-trump lead. (When the lead suit IS the trump suit, those trumps are already part of the follow set.)
-3. If you have no lead-suit card, any card is valid.
+### Trump modes (`operator ∈ {Eicheln, Rosen, Schellen, Schilten}`)
 
-> ⚠ **rulebook-divergence — Bauer-Zwang.** Standard tournament Schieber exempts only the trump *Under* (Bauer) from must-follow-suit; non-Under trumps may not replace a lead-suit follow. This code is more permissive — any trump breaks follow-suit. House-rule choice; lives in `get_valid_cards`.
+- **Leading** (`lead_suit is None`): any card.
+- **Trump led** (`lead_suit == operator`):
+  - No trump in hand → any card (can't follow).
+  - **Under-holdback (house rule, implemented):** if your *only* trump is the
+    trump *Under* (Bauer/Jack), you may play **any** card — the Under is never
+    forced. If you hold a non-Under trump too, you must follow with a trump
+    (Under stays optional among them).
+  - Otherwise → must follow with a trump.
+- **Non-trump led** (`lead_suit != operator`):
+  1. **Trump always playable (house rule, implemented):** you may always trump
+     in, even when you could follow the led suit — subject to no-undertrumping.
+  2. **No undertrumping (house rule, implemented):** once a trump sits in the
+     trick, any further trump you play must be **strictly higher** (by
+     `card.trumpf`) than the highest trump already played. *Exception:* if your
+     entire hand is trumps (no non-trump card to discard), you may undertrump
+     (you are forced to play a trump). With any non-trump card in hand you may
+     not undertrump — discard a non-trump or overtrump instead.
+  3. If you have no lead-suit card, you may also discard any non-trump card.
 
-> ⚠ **rulebook-divergence — Untertrumpfen.** Standard Schieber forbids playing a lower trump when partner hasn't already trumped (must over-trump if you choose to trump). The code does not enforce this — clients can undertrump freely. If a future task adds the rule, the change goes in `get_valid_cards`.
+The valid set is `follow ∪ allowed_trumps` (`+ non_trump discards` when you
+can't follow). `allowed_trumps` = trumps strictly above the highest played
+trump, or all your trumps if no trump played yet / your whole hand is trumps.
+
+### No-trump modes (`operator ∈ {Oben, Unten}`)
+
+Plain follow-suit: if you hold a lead-suit card you must play one; otherwise
+any card. The three trump house rules above do **not** apply.
 
 ## Schieben — `_trump_phase`
 
@@ -224,7 +249,7 @@ Used by `Play._setup_round` to seed the round's `operator` field for AI starters
 | Weis description / point map | `ausbau/game_session.py` | `describe_weis` |
 | Trick-winner | `ausbau/game_session.py` | `determine_trick_winner` |
 | Trick-points sum (incl. `trumpf_bock` ×5) | `ausbau/game_session.py` | `trick_points` |
-| Valid-cards (follow-suit + trump-Under exception) | `ausbau/game_session.py` | `get_valid_cards` |
+| Valid-cards (follow-suit + Under-holdback + no-undertrump house rules) | `ausbau/game_session.py` | `get_valid_cards` |
 | Naive AI card pick | `ausbau/game_session.py` | `ai_select_card` |
 | Stöck detect / apply | `ausbau/game_session.py` | `detect_stock`, `_apply_stoeck` |
 | Match bonus apply | `ausbau/game_session.py` | `_apply_match_bonus` |
@@ -239,8 +264,9 @@ Used by `Play._setup_round` to seed the round's `operator` field for AI starters
 ## Common Pitfalls
 
 - **`oben` / `unten` / `trumpf` are trick-rank ordinals, not points.** Under has `trumpf=18` (highest trump rank) and `wtrumpf=20` (point value). Distinct attributes; do not conflate.
-- **Any trump may break follow-suit** in this code (not just trump Under). Off-suit lead → trump play is always legal.
-- **No undertrump enforcement.** A trumped trick can be undertrumped freely. Fix-it-later.
+- **Any trump may break follow-suit** in this code (house rule, intentional). Off-suit lead → trumping in is always legal, subject to no-undertrumping.
+- **No-undertrumping enforced (house rule).** On a non-trump lead, once a trump is in the trick a further trump must be *strictly higher* by `card.trumpf` than the highest played. Exception: an all-trump hand (no non-trump to discard) may undertrump (forced). `get_valid_cards` reads `trick_so_far` to apply this.
+- **Under-holdback enforced (house rule).** Trump led + your only trump is the trump Under → any card is legal; the Under is never forced.
 - **Weis uses `oben`-order for sequences**, even when the round is a trump game. So in a Schellen-trump round, U-9-A-K-O (trump-order) is **not** a valid Weis sequence; B-U-O-K-A (oben-order) is.
 - **Weis four-of-a-kind = flat 100.** Trump-Under quad is not 200 in this code.
 - **Acht in Oben = 8 points** (code), not 0 (rulebook). Tests assume 8.

@@ -5,7 +5,7 @@ import asyncio
 import time
 from typing import Optional
 from Cards_refactored import (
-    Play, SUITS, PLAY_MODES, Card,
+    Play, SUITS, PLAY_MODES, Card, Under, create_card,
     wiis, wiis_gleiche,
 )
 from utils.game_utils import check_game_end
@@ -45,25 +45,124 @@ def find_card_in_hand(code: str, hand: dict):
     return None, None
 
 
-def get_valid_cards(hand: dict, lead_suit: Optional[str], operator: str) -> list:
-    """Return card codes valid to play. lead_suit=None means player is leading."""
+# Inverse of RANK_SUFFIX so a card CODE can be rebuilt into a Card object
+# (needed to read `card.trumpf` of cards already played this trick).
+_SUFFIX_TO_RANK = {suffix: rank for rank, suffix in RANK_SUFFIX.items()}
+
+
+def code_to_card(code: str) -> Card:
+    """Rebuild a Card from its CSS code (e.g. ``'SIU'`` → Under(Schilten)).
+
+    The single canonical inverse of :func:`card_to_code`. Used wherever a
+    card CODE must become a Card object — e.g. to read the trump strength
+    (`card.trumpf`) of cards already played in the current trick, which
+    arrive as codes in ``trick_so_far``, and by the AI strategies.
+    """
+    suit = None
+    for s, prefix in (
+        ("Schellen", "SE"), ("Schilten", "SI"), ("Eicheln", "E"), ("Rosen", "R"),
+    ):
+        if code.startswith(prefix):
+            suit = s
+            suffix = code[len(prefix):]
+            break
+    else:
+        raise ValueError(f"bad card code: {code!r}")
+    return create_card(_SUFFIX_TO_RANK[suffix], suit)
+
+
+def get_valid_cards(
+    hand: dict,
+    lead_suit: Optional[str],
+    operator: str,
+    trick_so_far: Optional[list] = None,
+) -> list:
+    """Return card codes valid to play. lead_suit=None means player is leading.
+
+    ``trick_so_far`` is the list of cards already played this trick. Each
+    entry may be a CODE string, a Card, or the engine's
+    ``{"position", "card"}`` dict (``card`` being a code). It is only
+    consulted in trump modes to enforce the no-undertrumping rule.
+
+    Schieber house rules in the four TRUMP modes (Eicheln/Rosen/Schellen/
+    Schilten):
+
+      1. Under-holdback — if the trump suit is led and the player's ONLY
+         trump is the trump Under, they need not play it (any card valid).
+      2. Trump always playable — on a non-trump lead the player may always
+         trump in, even when able to follow.
+      3. No undertrumping — on a non-trump lead, once a trump sits in the
+         trick any further trump must be STRICTLY HIGHER (by ``card.trumpf``)
+         than the highest already played; undertrumping is allowed only when
+         the player has no non-trump card to discard (all-trump hand).
+
+    Oben/Unten are unaffected: follow-suit if able, else any card.
+    """
     all_cards = [c for suit in SUITS for c in hand[suit]]
 
     if lead_suit is None:
         return [card_to_code(c) for c in all_cards]
 
-    follow_cards = hand.get(lead_suit, [])
-    if not follow_cards:
-        return [card_to_code(c) for c in all_cards]
+    # ── Non-trump modes (Oben / Unten): plain follow-suit. ──────────────
+    if operator not in SUITS:
+        follow_cards = hand.get(lead_suit, [])
+        if not follow_cards:
+            return [card_to_code(c) for c in all_cards]
+        return [card_to_code(c) for c in follow_cards]
 
-    valid = list(follow_cards)
-    # Trump cards may always be played in a trump game (including when the
-    # player could otherwise follow a non-trump lead). When the lead suit IS
-    # the trump suit, `follow_cards` already contains them.
-    if operator in SUITS and lead_suit != operator:
-        for c in hand.get(operator, []):
+    # ── Trump modes ─────────────────────────────────────────────────────
+    my_trumps = list(hand.get(operator, []))
+
+    if lead_suit == operator:
+        # Trump led.
+        if not my_trumps:
+            return [card_to_code(c) for c in all_cards]   # can't follow
+        # Rule 1: only-trump-is-Under → Under not forced, any card allowed.
+        if all(isinstance(c, Under) for c in my_trumps):
+            return [card_to_code(c) for c in all_cards]
+        # Otherwise must follow with a trump (Under optional among them).
+        return [card_to_code(c) for c in my_trumps]
+
+    # Non-trump lead.
+    follow = list(hand.get(lead_suit, []))
+    non_trump = [c for c in all_cards if c.suit != operator]
+
+    # Rule 3: highest trump already in the trick (if any).
+    played_trumps = []
+    for entry in (trick_so_far or []):
+        if isinstance(entry, Card):
+            card = entry
+        elif isinstance(entry, dict):
+            card = code_to_card(entry["card"])
+        else:  # bare code string
+            card = code_to_card(entry)
+        if card.suit == operator:
+            played_trumps.append(card)
+
+    if played_trumps:
+        highest = max(t.trumpf for t in played_trumps)
+        allowed_trumps = [t for t in my_trumps if t.trumpf > highest]
+    else:
+        allowed_trumps = list(my_trumps)   # first to trump → any trump
+
+    # All-trump exception: if the player has no non-trump card to discard,
+    # they are forced to play a trump even if it undertrumps.
+    if not non_trump:
+        allowed_trumps = list(my_trumps)
+
+    valid = list(follow)
+    for c in allowed_trumps:
+        if c not in valid:
+            valid.append(c)
+    # Can't follow and can't (legally) trump → discards allowed.
+    if not follow:
+        for c in non_trump:
             if c not in valid:
                 valid.append(c)
+
+    # Safety: a player with cards must never be left with no legal play.
+    if not valid and all_cards:
+        valid = list(all_cards)
 
     return [card_to_code(c) for c in valid]
 
@@ -136,9 +235,18 @@ def trick_points(trick: dict, operator: str, *, trumpf_bock: bool = False) -> in
     return total * _mode_multiplier(operator, trumpf_bock=trumpf_bock)
 
 
-def ai_select_card(hand: dict, lead_suit: Optional[str], operator: str) -> Card:
-    """Simple AI: lead=highest point value, follow=lowest point value."""
-    valid_codes = get_valid_cards(hand, lead_suit, operator)
+def ai_select_card(
+    hand: dict,
+    lead_suit: Optional[str],
+    operator: str,
+    trick_so_far: Optional[list] = None,
+) -> Card:
+    """Simple AI: lead=highest point value, follow=lowest point value.
+
+    ``trick_so_far`` is forwarded to ``get_valid_cards`` so the candidate
+    set already excludes illegal undertrumps.
+    """
+    valid_codes = get_valid_cards(hand, lead_suit, operator, trick_so_far=trick_so_far)
     valid_cards = [find_card_in_hand(code, hand)[0] for code in valid_codes]
 
     def point_value(card: Card) -> int:
@@ -514,7 +622,10 @@ class GameSession:
             hand = getattr(play, position, None)
             if hand is not None:
                 lead_suit = self._lead_suit_from_trick_so_far()
-                valid = get_valid_cards(hand, lead_suit, play.operator)
+                valid = get_valid_cards(
+                    hand, lead_suit, play.operator,
+                    trick_so_far=list(self._current_trick_so_far),
+                )
                 await self.send_to_seat(position, {
                     "type": "play_request",
                     "trick_so_far": list(self._current_trick_so_far),
@@ -1062,7 +1173,9 @@ class GameSession:
 
         for i in range(4):
             hand = getattr(play, player)
-            valid = get_valid_cards(hand, lead_suit, play.operator)
+            valid = get_valid_cards(
+                hand, lead_suit, play.operator, trick_so_far=list(trick_order),
+            )
 
             # Live mid-trick tracking — kept fresh per iteration so a
             # reconnect inside this trick rebuilds the right view via

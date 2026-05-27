@@ -219,10 +219,11 @@ async def test_compute_ai_play_uses_ai_select_card(monkeypatch):
 
     captured = {}
 
-    def fake_ai_select_card(hand, lead_suit, operator):
+    def fake_ai_select_card(hand, lead_suit, operator, trick_so_far=None):
         captured["hand"] = hand
         captured["lead_suit"] = lead_suit
         captured["operator"] = operator
+        captured["trick_so_far"] = trick_so_far
         return chosen_card
 
     # `MediumStrategy.pick_card` does `from ausbau.game_session import
@@ -246,3 +247,4 @@ async def test_compute_ai_play_uses_ai_select_card(monkeypatch):
     assert captured["hand"] is play.compo
     assert captured["lead_suit"] == "Rosen"
     assert captured["operator"] == "Eicheln"
+    assert captured["trick_so_far"] == []   # forwarded from valid_actions
