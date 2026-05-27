@@ -39,13 +39,9 @@ a:hover {
 	height: 600px;
 	margin: 0 auto;
 
-	display: -webkit-box;
-	-webkit-box-pack: center;
-	-webkit-box-align: center;
-
-	display: -moz-box;
-	-moz-box-pack: center;
-	-moz-box-align: center;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
 }
 
 #cards {
@@ -186,27 +182,31 @@ html, body {
   margin: 0; padding: 0;
   height: 100%; overflow: hidden;
   font-family: system-ui, sans-serif;
-  background: #111; color: #ccc;
+  background: #2d5a27; color: #ccc;
+}
+/* Reserve the fixed chat panel's width so the centered #game board never
+   slides under it on narrower desktop widths (chat is position:fixed and
+   reserves no flow space; #game centers via margin:0 auto). */
+body { padding-right: 220px; }
+
+/* Below 1020px the fixed 800px board + 220px chat exceed the viewport, so the
+   board's right edge would still slide under the chat. Scale the whole board
+   down so it fits the reserved column (down to ~1000px: 1000-220=780 ≥ 800*0.92).
+   transform-origin top-centre keeps it under the auth strip and clear of chat. */
+@media (max-width: 1019px) {
+  #game {
+    transform: scale(0.92);
+    transform-origin: top center;
+  }
 }
 
-#game {
-  display: flex; flex-direction: row;
-  height: 100vh;
-  background: #2d5a27;
-}
-
-#game-main {
-  flex: 1; min-width: 0;
-  display: flex; flex-direction: column;
-  overflow: hidden;
-}
-
-/* ⑥ Chat sidebar */
+/* ⑥ Chat sidebar — fixed right panel, outside the game board */
 #chat-panel {
-  width: 220px; flex-shrink: 0;
+  position: fixed; right: 0; top: 2.4rem; bottom: 0;
+  width: 220px; z-index: 50;
   display: flex; flex-direction: column;
-  background: rgba(0,0,0,.45);
-  border-left: 1px solid rgba(255,255,255,.08);
+  background: rgba(0,0,0,.65);
+  border-left: 1px solid rgba(255,255,255,.1);
 }
 #chat-header {
   padding: 6px 10px;
@@ -326,7 +326,7 @@ html, body {
 .trick-slot .card .face.front { display: none; }     /* hide card-back pattern */
 .trick-slot .card .face.back { transform: none; position: absolute; z-index: 1; }
 
-/* ④ Game log — left side so it doesn't conflict with the chat sidebar */
+/* ④ Game log — kept on the LEFT so it never sits near the chat sidebar */
 #game-log {
   position: absolute; bottom: 10px; left: 14px;
   width: 200px; max-height: 160px;
