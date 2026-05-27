@@ -384,6 +384,43 @@ body { padding-right: 220px; }
 }
 .modal-box h3 { color: #fff; text-align: center; margin-bottom: 14px; font-size: 15px; }
 
+/* Trump modal — the player must SEE their hand while choosing trump, so its
+   overlay does NOT dim the table and lets clicks pass through to the page
+   below. Only the .modal-box itself stays opaque and interactive. The box is
+   draggable by its <h3> header (see schieber.js) so the player can move it
+   aside to reveal cards underneath. */
+#trump-modal {
+  /* Let the table/hand beneath remain clickable; the box re-enables itself. */
+  pointer-events: none;
+}
+#trump-modal .modal-overlay {
+  background: transparent;       /* no dimming — hand stays fully visible */
+  pointer-events: none;
+}
+#trump-modal .modal-box {
+  pointer-events: auto;          /* the box itself is interactive */
+  /* JS positions the box absolutely (left/top) while dragging; until then it
+     is centred by the flex container. A drop shadow keeps it legible over the
+     undimmed table. */
+  box-shadow: 0 8px 30px rgba(0, 0, 0, .6);
+}
+#trump-modal .modal-box h3 {
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;            /* pointer events drive the drag, not scroll */
+}
+#trump-modal .modal-box h3::before {
+  /* drag-handle affordance */
+  content: '\2630';              /* ☰ */
+  color: #777;
+  font-size: 12px;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+#trump-modal .modal-box.dragging { cursor: grabbing; }
+#trump-modal .modal-box.dragging h3 { cursor: grabbing; }
+
 /* Trump suit grid */
 .suit-grid {
   display: grid; grid-template-columns: 1fr 1fr;

@@ -561,8 +561,95 @@ function onTrumpRequest(msg) {
     modal.classList.add('hidden');
   };
 
+  // Reset the box to its default centred position. A drag from a previous
+  // trump phase (e.g. after a Schieben pass-back or in the next round) must
+  // not persist — otherwise the box could reopen off-screen.
+  resetTrumpBoxPosition();
   modal.classList.remove('hidden');
 }
+
+// ─── Trump modal drag (Pointer Events) ──────────────────────────────────────
+//
+// The trump modal's overlay does not dim the table (see game.css), so the
+// player can see their hand while choosing trump. The .modal-box can be
+// dragged aside by its <h3> header to fully reveal the cards underneath.
+// Dragging uses absolute left/top positioning; until the first drag the box is
+// centred by the flex container. We constrain the box to stay within the
+// viewport so it can never be moved fully off-screen.
+
+// Restore flex-centred layout — clears any inline drag position so the next
+// open starts centred.
+function resetTrumpBoxPosition() {
+  const box = document.querySelector('#trump-modal .modal-box');
+  if (!box) return;
+  box.style.left = '';
+  box.style.top = '';
+  box.style.position = '';
+  box.style.margin = '';
+  box.classList.remove('dragging');
+}
+
+function initTrumpDrag() {
+  const box = document.querySelector('#trump-modal .modal-box');
+  const handle = box ? box.querySelector('h3') : null;
+  if (!box || !handle) return;
+
+  let dragging = false;
+  let pointerId = null;
+  let offsetX = 0;   // pointer offset from box's top-left
+  let offsetY = 0;
+
+  function clamp(val, min, max) {
+    return Math.max(min, Math.min(max, val));
+  }
+
+  handle.addEventListener('pointerdown', (e) => {
+    // Primary button / touch only.
+    if (e.button !== undefined && e.button !== 0) return;
+    const rect = box.getBoundingClientRect();
+    // Switch from flex-centred to absolute positioning at the current spot so
+    // the box does not jump on first drag.
+    box.style.position = 'fixed';
+    box.style.margin = '0';
+    box.style.left = `${rect.left}px`;
+    box.style.top = `${rect.top}px`;
+    offsetX = e.clientX - rect.left;
+    offsetY = e.clientY - rect.top;
+    dragging = true;
+    pointerId = e.pointerId;
+    box.classList.add('dragging');
+    try { handle.setPointerCapture(pointerId); } catch (_) { /* ignore */ }
+    e.preventDefault();
+  });
+
+  handle.addEventListener('pointermove', (e) => {
+    if (!dragging || e.pointerId !== pointerId) return;
+    const rect = box.getBoundingClientRect();
+    // Keep the box within the viewport. Allow it to be dragged so its edge can
+    // reach a screen edge, but never fully off-screen: clamp top-left so the
+    // whole box stays visible.
+    const maxLeft = window.innerWidth - rect.width;
+    const maxTop = window.innerHeight - rect.height;
+    const left = clamp(e.clientX - offsetX, 0, Math.max(0, maxLeft));
+    const top = clamp(e.clientY - offsetY, 0, Math.max(0, maxTop));
+    box.style.left = `${left}px`;
+    box.style.top = `${top}px`;
+    e.preventDefault();
+  });
+
+  function endDrag(e) {
+    if (!dragging || (pointerId !== null && e.pointerId !== pointerId)) return;
+    dragging = false;
+    box.classList.remove('dragging');
+    try { handle.releasePointerCapture(pointerId); } catch (_) { /* ignore */ }
+    pointerId = null;
+  }
+
+  handle.addEventListener('pointerup', endDrag);
+  handle.addEventListener('pointercancel', endDrag);
+}
+
+initTrumpDrag();
 
 function onTrumpPending(msg) {
   const who = msg.by_position
