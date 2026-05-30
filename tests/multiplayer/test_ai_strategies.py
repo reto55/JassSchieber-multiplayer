@@ -229,15 +229,22 @@ def test_hard_pick_trump_long_no_under_no_neun_schiebens():
 
 
 def test_hard_pick_card_lead_plays_guaranteed_winner_ass():
-    """When leading and we hold the highest remaining of a suit, play it."""
+    """When leading with NO trump in hand and holding the highest remaining of
+    a suit, play it.
+
+    Note: the trump-drawing extension makes rule A (lead highest trump while
+    opponents may still hold trump) take precedence over guaranteed off-suit
+    winners. To keep exercising the guaranteed-winner path, this hand holds no
+    Eicheln (trump) card, so rule A cannot fire.
+    """
     s = HardStrategy("comps")
     play = Play(spiel=1)
     play.operator = "Eicheln"
-    # Stuff hand so comps holds RA (Rosen Ass) and Rosen-Ass is the highest
-    # remaining of its suit (no other Rosen Ass exists).
+    # comps holds RA (Rosen Ass) — the highest remaining of its suit — and no
+    # trump (Eicheln) cards at all.
     _hand_with_suits(play, "comps", {
         "Rosen": ["A", "9", "8"],
-        "Eicheln": ["7", "6"],
+        "Eicheln": [],
         "Schellen": ["7", "6"],
         "Schilten": ["6", "U"],
     })

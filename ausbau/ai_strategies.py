@@ -74,17 +74,38 @@ class MediumStrategy(AIStrategy):
 
 
 class HardStrategy(AIStrategy):
-    """Per-spiel card tracking + trump conservation + smarter trump pick.
+    """Per-spiel card tracking + trump conservation + smarter trump pick
+    + trump-drawing ("Trumpf ziehen") leading logic.
 
-    Implementation lands across Tasks 3-6.
+    Implementation lands across Tasks 3-6 plus the trump-draw extension.
     """
 
     def __init__(self, position: str):
         super().__init__(position)
         self._remaining_by_suit: dict[str, set[str]] = {}
+        # ── Trump-draw state (rebuilt every spiel in on_spiel_start) ──────
+        # The active trump suit (play.operator) once known, else None. Cached
+        # from pick_trump / pick_card so on_card_played — which does NOT
+        # receive play — can resolve "trump led" / "is trump" questions.
+        self._operator: Optional[str] = None
+        # Per-opponent "is void in trump" flag. Partner is never tracked.
+        self._opp_void_trump: dict[str, bool] = {}
+        # Per-position set of suits each player has shown (played). Own plays
+        # never populate it.
+        self._opp_shown_suits: dict[str, set[str]] = {}
+        # Ordered (position, code) list reconstructing the current trick.
+        # Reset every 4 cards; the first entry's suit is the lead suit.
+        self._running_trick: list = []
+
+    def _opponents(self, play) -> list:
+        """The two non-self, non-partner positions."""
+        partner = play.partner.get(self.position)
+        return [p for p in ("comps", "compo", "compn", "compe")
+                if p != self.position and p != partner]
 
     def on_spiel_start(self, play) -> None:
-        """Rebuild _remaining_by_suit from the deck minus own hand."""
+        """Rebuild _remaining_by_suit (deck minus own hand) and reset all
+        trump-draw tracking state."""
         from Cards_refactored import SUITS
         from ausbau.game_session import SUIT_PREFIX, RANK_SUFFIX, hand_to_codes
         self._remaining_by_suit = {suit: set() for suit in SUITS}
@@ -95,19 +116,73 @@ class HardStrategy(AIStrategy):
                 if code not in own:
                     self._remaining_by_suit[suit].add(code)
 
+        # Reset trump-draw state. operator may not yet be chosen at spiel
+        # start; it is cached lazily once pick_trump / pick_card sees it.
+        self._operator = play.operator or None
+        self._opp_void_trump = {p: False for p in self._opponents(play)}
+        self._opp_shown_suits = {
+            p: set() for p in ("comps", "compo", "compn", "compe")
+        }
+        self._running_trick = []
+
     def on_card_played(self, player_position: str, card_code: str) -> None:
-        """Remove a played card from tracking. No-op for own plays or unknowns."""
-        if player_position == self.position:
-            return
+        """Update remaining-card tracking, void-in-trump detection,
+        shown-suit tracking and current-trick reconstruction.
+
+        Fired for ALL seats in play order, including this AI's own plays
+        (see game_session._play_trick line ~1277). Self-plays must not feed
+        the opponent-facing tracking (remaining/void/shown), but DO advance
+        the running-trick cursor so the lead-suit / 4-card-boundary logic
+        stays in sync with the real table order.
+        """
+        from Cards_refactored import SUITS
         from ausbau.game_session import code_to_card
+
         try:
-            suit = code_to_card(card_code).suit
+            card = code_to_card(card_code)
         except (ValueError, KeyError):
             return
-        self._remaining_by_suit.get(suit, set()).discard(card_code)
+        suit = card.suit
+
+        # Lead suit of the in-progress trick (None if this card opens it).
+        is_lead = not self._running_trick
+        lead_suit_name = None
+        if not is_lead:
+            try:
+                lead_suit_name = code_to_card(self._running_trick[0][1]).suit
+            except (ValueError, KeyError):
+                lead_suit_name = None
+
+        if player_position != self.position:
+            # Remaining-card tracking: we already know our own hand.
+            self._remaining_by_suit.get(suit, set()).discard(card_code)
+            # Shown-suit tracking (any suit the opponent reveals).
+            self._opp_shown_suits.setdefault(player_position, set()).add(suit)
+            # Void-in-trump detection (house rule): a trump was led
+            # (lead suit == operator) and this opponent discarded a non-trump
+            # card → they hold no trump. Note: a player whose only trump is
+            # the trump Under may legally discard under the Under-holdback
+            # house rule and be flagged "void" here. That imprecision is
+            # harmless — a lone trump Under can never be forced out by
+            # leading trump anyway, so treating its holder as void costs
+            # nothing.
+            if (
+                self._operator in SUITS
+                and not is_lead
+                and lead_suit_name == self._operator
+                and suit != self._operator
+                and player_position in self._opp_void_trump
+            ):
+                self._opp_void_trump[player_position] = True
+
+        # Append to the running trick; reset on the 4-card boundary.
+        self._running_trick.append((player_position, card_code))
+        if len(self._running_trick) >= 4:
+            self._running_trick = []
 
     def pick_trump(self, play, schieben_allowed: bool) -> dict:
         from Cards_refactored import SUITS
+        self._operator = play.operator or None
         hand = getattr(play, self.position)
 
         # 1. Find longest trump-candidate suit (with farbe_lang tie-break).
@@ -176,10 +251,100 @@ class HardStrategy(AIStrategy):
                 return False
         return True
 
+    def _both_opponents_void_trump(self, play) -> bool:
+        """True once BOTH opponents are known to hold no trump."""
+        opps = self._opponents(play)
+        return bool(opps) and all(
+            self._opp_void_trump.get(p, False) for p in opps
+        )
+
+    def _lead(self, play, valid_cards) -> dict:
+        """Trump-drawing leading logic.
+
+        Precedence (trump modes only):
+          A. Draw trump — if at least one opponent may still hold trump AND we
+             still hold trump, lead our HIGHEST trump by ``card.trumpf``
+             (classic Trumpf ziehen, top-down). Fires naturally for the
+             declaring side because Schieben does not change ``play.first``.
+          B. Both opponents void in trump — never open with trump. Lead the
+             highest-value guaranteed winner if we hold one; else dump a low
+             card into a non-trump suit an opponent has shown (and that still
+             has outstanding cards) so partner — a remaining trump holder —
+             can trump in; else today's lowest-card fallback.
+          C. We hold no trump — rule A cannot fire; falls through to B.
+
+        Non-trump modes (Oben / Unten) keep today's behaviour unchanged.
+        """
+        from Cards_refactored import SUITS
+        from ausbau.game_session import card_to_code
+
+        operator = play.operator
+
+        # Non-trump modes: today's behaviour unchanged.
+        if operator not in SUITS:
+            return self._lead_legacy(play, valid_cards)
+
+        my_trumps = [c for c in valid_cards if c.suit == operator]
+        both_void = self._both_opponents_void_trump(play)
+
+        # ── A. Draw trump ────────────────────────────────────────────────
+        if my_trumps and not both_void:
+            pick = max(my_trumps, key=lambda c: c.trumpf)
+            return {"type": "play_card", "card": card_to_code(pick)}
+
+        # ── B / C. Drawing complete (or we hold no trump) ────────────────
+        # Cash the highest-POINT guaranteed winner first (key is point value,
+        # not trick rank — every guaranteed winner already takes the lead, so
+        # among them we prefer the one that banks the most points).
+        winners = [c for c in valid_cards if self._is_guaranteed_winner(c, play)]
+        if winners:
+            pick = max(winners, key=lambda c: self._card_value(c, operator))
+            return {"type": "play_card", "card": card_to_code(pick)}
+
+        if both_void:
+            shown_suits = set()
+            for opp in self._opponents(play):
+                shown_suits |= self._opp_shown_suits.get(opp, set())
+            candidates = [
+                c for c in valid_cards
+                if c.suit != operator
+                and c.suit in shown_suits
+                and self._remaining_by_suit.get(c.suit)
+            ]
+            if candidates:
+                low_key = lambda c: (self._card_value(c, operator), c.rank)
+                pick = min(candidates, key=low_key)
+                return {"type": "play_card", "card": card_to_code(pick)}
+
+        # Fallback: lowest-card lead. In a trump mode we reach here with trump
+        # still in hand only when drawing is complete (both opponents void) —
+        # rule A already returned otherwise. Rule B forbids re-opening with
+        # trump once drawn, so prefer any non-trump card; lead trump only if the
+        # whole hand is trump.
+        pool = valid_cards
+        non_trump = [c for c in valid_cards if c.suit != operator]
+        if non_trump:
+            pool = non_trump
+        pick = min(pool, key=lambda c: self._card_value(c, operator))
+        return {"type": "play_card", "card": card_to_code(pick)}
+
+    def _lead_legacy(self, play, valid_cards) -> dict:
+        """Pre-trump-draw leading behaviour (used for no-trump modes)."""
+        from ausbau.game_session import card_to_code
+        winners = [c for c in valid_cards if self._is_guaranteed_winner(c, play)]
+        if winners:
+            pick = max(winners, key=lambda c: self._card_value(c, play.operator))
+            return {"type": "play_card", "card": card_to_code(pick)}
+        pick = min(valid_cards, key=lambda c: self._card_value(c, play.operator))
+        return {"type": "play_card", "card": card_to_code(pick)}
+
     def pick_card(self, play, lead_suit: Optional[str], trick_so_far: list) -> dict:
         from ausbau.game_session import (
             get_valid_cards, find_card_in_hand, card_to_code,
         )
+        # Cache the active trump suit so on_card_played (which never sees
+        # play) can resolve "trump led" / "is trump" questions.
+        self._operator = play.operator
         hand = getattr(play, self.position)
         valid_codes = get_valid_cards(
             hand, lead_suit, play.operator, trick_so_far=trick_so_far,
@@ -188,12 +353,7 @@ class HardStrategy(AIStrategy):
 
         # ── Leading ─────────────────────────────────────────────────────────
         if lead_suit is None:
-            winners = [c for c in valid_cards if self._is_guaranteed_winner(c, play)]
-            if winners:
-                pick = max(winners, key=lambda c: self._card_value(c, play.operator))
-                return {"type": "play_card", "card": card_to_code(pick)}
-            pick = min(valid_cards, key=lambda c: self._card_value(c, play.operator))
-            return {"type": "play_card", "card": card_to_code(pick)}
+            return self._lead(play, valid_cards)
 
         # ── Following ──────────────────────────────────────────────────────
         from Cards_refactored import SUITS
