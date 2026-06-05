@@ -237,33 +237,6 @@ def test_on_spiel_start_resets_trump_draw_state():
     assert all(v == set() for v in strat._opp_shown_suits.values())
 
 
-# ── Trump stopping when all outstanding trumps played ──────────────────────────
-
-def test_stops_trump_when_all_outstanding_trumps_played():
-    # If all outstanding trumps (outside our hand) are gone/played,
-    # the AI must stop leading trump, even if no opponent has been
-    # flagged void through a non-trump discard on a trump lead.
-    # Schellen trump. comps holds Schellen 6, plus Rosen Ass.
-    play, strat = _make("comps", "Schellen",
-                        {"Schellen": ["6"], "Rosen": ["A"]})
-    strat.pick_card(play, lead_suit=None, trick_so_far=[])  # cache operator
-
-    # Simulate that all other Schellen (trumps) were played.
-    # Initially 8 trumps outside our hand: U, 9, A, K, O, B, 8, 7.
-    # Let's say all of them are played by other players.
-    for code in ["SEU", "SE9", "SEA", "SEK", "SEO", "SEB", "SE8", "SE7"]:
-        strat.on_card_played("compe", code)
-
-    # Outstanding Schellen (trumps) is now empty
-    assert len(strat._remaining_by_suit["Schellen"]) == 0
-
-    # We are leading. Since all outstanding trumps are gone, the AI should NOT
-    # lead its remaining trump (SE6). Instead, it should lead the guaranteed
-    # winner (Rosen Ass, RA).
-    action = strat.pick_card(play, lead_suit=None, trick_so_far=[])
-    assert action == {"type": "play_card", "card": "RA"}
-
-
 if __name__ == "__main__":
     import sys
     sys.exit(pytest.main([__file__, "-v"]))

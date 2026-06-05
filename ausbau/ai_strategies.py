@@ -252,18 +252,11 @@ class HardStrategy(AIStrategy):
         return True
 
     def _both_opponents_void_trump(self, play) -> bool:
-        """True once BOTH opponents are known to hold no trump or all trumps
-        outside our hand have already been played/accounted for."""
+        """True once BOTH opponents are known to hold no trump."""
         opps = self._opponents(play)
-        if not opps:
-            return False
-        if all(self._opp_void_trump.get(p, False) for p in opps):
-            return True
-        operator = play.operator
-        from Cards_refactored import SUITS
-        if operator in SUITS and not self._remaining_by_suit.get(operator):
-            return True
-        return False
+        return bool(opps) and all(
+            self._opp_void_trump.get(p, False) for p in opps
+        )
 
     def _lead(self, play, valid_cards) -> dict:
         """Trump-drawing leading logic.
