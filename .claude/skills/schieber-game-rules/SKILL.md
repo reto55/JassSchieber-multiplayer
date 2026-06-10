@@ -7,6 +7,8 @@ description: Authoritative Schieber (Swiss Jass) game rules reference — card p
 
 Swiss 4-player Jass variant. **This document reflects the implementation in this repo, not the standard rulebook.** Where the two differ, the code-as-ground-truth value is given and the divergence is noted (`⚠ rulebook-divergence`).
 
+**Authority rule:** divergences are *intentional house rules* unless a marker explicitly says "future convergence work". Never change game-scoring behavior toward the standard rulebook without a user-approved plan document. When game-rule semantics change, update this skill **before** the code change lands (same skill-first discipline as `schieber-protocol`).
+
 ## Players & Teams
 
 | Position | Key | Team |
@@ -189,6 +191,8 @@ Broadcast: `weis_resolution { winning_team: 'sn' | 'ow' | 'tie', weis_by_positio
 
 Holding **König + Ober of the trump suit** in your starting hand: +20 to your team. Variant `stoeck` must be enabled. No-trump rounds (`Oben`/`Unten`) never award Stöck. Multiple seats can each award their own +20 (rare with one deck, but the code supports it). Applied **before** Weis phase, in `_run_spiel` step 3. The base value is then multiplied by the mode multiplier (see Multiplikator below).
 
+> ⚠ **rulebook-divergence — Stöck auto-award (intentional house rule).** Standard Schieber requires the holder to *announce* Stöck when playing the second of the two cards — silence forfeits it, and the announcement timing matters for reaching the target mid-round. This code auto-detects Stöck from the starting hand and credits it before any card is played; there is no announcement and no forfeiture.
+
 ## Multiplikator — `_mode_multiplier(operator, *, trumpf_bock=False)`
 
 Single source of truth for the per-mode score multiplier. Every score-bearing site routes through this helper.
@@ -232,6 +236,8 @@ In order:
 
 After every spiel, `start_game` checks `check_game_end(point_sn, point_ow, end_game)`. On true, computes winner inline (`sn` / `ow` / `tie`) and broadcasts `game_end`.
 
+> ⚠ **rulebook-divergence — game-end timing (FUTURE CONVERGENCE WORK, not a house rule).** Standard Schieber ends the *instant* a team reaches the target; this code checks only between spiels, so the full spiel always plays out and a `'tie'` outcome is possible (both teams crossing the target in the same spiel) — standard play cannot tie. Agreed target behavior (2026-06-10): check after **every scoring event** in order (Stöck award → Weis resolution → each trick); first team to cross wins immediately, spiel aborts mid-play, `'tie'` disappears. Requires its own plan document before implementation — do not converge ad hoc.
+
 ## Trump Determination (AI / starter heuristic) — `determine_trumpf`
 
 Used by `Play._setup_round` to seed the round's `operator` field for AI starters. Returns `'Schieben'`, a suit name, `'Oben'`, or `'Unten'` based on longest sequence length and sum of `card.oben` values in that suit. Pure heuristic; not authoritative game rules. AI strategies (sub-project C) override this via `ausbau/ai_strategies.py`.
@@ -273,3 +279,4 @@ Used by `Play._setup_round` to seed the round's `operator` field for AI starters
 - **Last-trick bonus = +5**, always, not variant-gated. Match bonus = +100 separately, variant-gated.
 - **`Schieben` only changes the trump-chooser, not `play.first`.** The lead seat is fixed by spiel number.
 - **Stöck applies *before* Weis** in `_run_spiel`; if you reorder steps, broadcast deltas (`spiel_end.weis_added`) will mis-attribute.
+- **Game end is checked between spiels only** — `'tie'` exists solely because of this. Mid-round termination is scheduled future work (see ⚠ in Per-Spiel Scoring Flow), not something to "fix" in passing.

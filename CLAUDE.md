@@ -101,6 +101,7 @@ SQLite database (`schieber.db`) with tables: `schieber` (sessions), `game`, `pla
 - Shared intermediate artifacts live in `_workspace/` (gitignored via patterns like `_workspace/`).
 - Protocol changes go to `.claude/skills/schieber-protocol/SKILL.md` BEFORE code changes.
 - Game-rule questions resolve to `.claude/skills/schieber-game-rules/SKILL.md`.
+- Game-rule semantic changes (`get_valid_cards`, `trick_points`, `determine_trick_winner`, Weis, Stöck, multipliers, game end) go to `.claude/skills/schieber-game-rules/SKILL.md` BEFORE code changes; QA treats mismatches as DRIFT vs SKILL_GAP, same as protocol. Rulebook divergences in that skill are intentional house rules unless marked "future convergence work".
 
 **Variation ledger:**
 | Date | Change | Target | Reason |
@@ -114,3 +115,4 @@ SQLite database (`schieber.db`) with tables: `schieber` (sessions), `game`, `pla
 | 2026-04-20 | Defensive staging rule in Phase 5 | schieber-build | Pre-staged user work (schieber.txt) got swept into harness commit; needed soft reset to split |
 | 2026-04-20 | QA agent distinguishes DRIFT vs SKILL_GAP explicitly | schieber-qa | Initial skill was aspirational from the plan, not factual from code; Batch 1 found 4 gaps that needed skill updates, not code fixes |
 | 2026-04-20 | Protocol-skill sanity check added to Phase 0 | schieber-build | Orchestrator must verify the skill against actual `send_json`/`receive_json` sites before trusting it as ground truth |
+| 2026-06-10 | Game-rules skill gets skill-first sync discipline + authority rule (divergences = house rules; game-end timing marked future convergence work) | schieber-game-rules | /grill-me session: prevent agents from "fixing" intentional house rules toward the rulebook, and from converging game-end timing ad hoc without a plan |
