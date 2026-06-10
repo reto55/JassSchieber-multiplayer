@@ -1,54 +1,1102 @@
 {
-  "/mnt/archive/Dokumente/JassSchieber-multiplayer/Cards_refactored.py": 1777715086.6980078,
-  "/mnt/archive/Dokumente/JassSchieber-multiplayer/ausbau/__init__.py": 1777391357.8881195,
-  "/mnt/archive/Dokumente/JassSchieber-multiplayer/ausbau/ai_strategies.py": 1777526369.486621,
-  "/mnt/archive/Dokumente/JassSchieber-multiplayer/ausbau/database_manager.py": 1777391357.8887284,
-  "/mnt/archive/Dokumente/JassSchieber-multiplayer/ausbau/db_adapter.py": 1777391357.8887284,
-  "/mnt/archive/Dokumente/JassSchieber-multiplayer/ausbau/db_example.py": 1777391357.8887284,
-  "/mnt/archive/Dokumente/JassSchieber-multiplayer/ausbau/db_migration.py": 1777391357.8887284,
-  "/mnt/archive/Dokumente/JassSchieber-multiplayer/ausbau/game_session.py": 1778065646.3790476,
-  "/mnt/archive/Dokumente/JassSchieber-multiplayer/ausbau/html5/js/game.js": 1777391357.8945107,
-  "/mnt/archive/Dokumente/JassSchieber-multiplayer/ausbau/html5/js/home.js": 1777561342.894704,
-  "/mnt/archive/Dokumente/JassSchieber-multiplayer/ausbau/html5/js/html5games.matchgame.js": 1777391357.895376,
-  "/mnt/archive/Dokumente/JassSchieber-multiplayer/ausbau/html5/js/html5games.pingpong.js": 1777391357.895376,
-  "/mnt/archive/Dokumente/JassSchieber-multiplayer/ausbau/html5/js/html5jass.matchjass.js": 1777391357.895376,
-  "/mnt/archive/Dokumente/JassSchieber-multiplayer/ausbau/html5/js/jquery-1.6.min.js": 1777391357.895376,
-  "/mnt/archive/Dokumente/JassSchieber-multiplayer/ausbau/html5/js/lobby.js": 1777893415.888748,
-  "/mnt/archive/Dokumente/JassSchieber-multiplayer/ausbau/html5/js/schieber.js": 1777892316.6221013,
-  "/mnt/archive/Dokumente/JassSchieber-multiplayer/ausbau/insert.py": 1777391357.8955107,
-  "/mnt/archive/Dokumente/JassSchieber-multiplayer/ausbau/room.py": 1777526369.486621,
-  "/mnt/archive/Dokumente/JassSchieber-multiplayer/ausbau/schieber.py": 1777391357.8955107,
-  "/mnt/archive/Dokumente/JassSchieber-multiplayer/ausbau/schieber_db.py": 1777391357.8955107,
-  "/mnt/archive/Dokumente/JassSchieber-multiplayer/ausbau/schieber_json.py": 1777391357.8955107,
-  "/mnt/archive/Dokumente/JassSchieber-multiplayer/ausbau/server.py": 1778063898.9753332,
-  "/mnt/archive/Dokumente/JassSchieber-multiplayer/frontend/auth/__init__.py": 1777486813.3508744,
-  "/mnt/archive/Dokumente/JassSchieber-multiplayer/frontend/auth/admin.py": 1777486813.3508744,
-  "/mnt/archive/Dokumente/JassSchieber-multiplayer/frontend/auth/app.py": 1777486813.3518746,
-  "/mnt/archive/Dokumente/JassSchieber-multiplayer/frontend/auth/db.py": 1777486813.3518746,
-  "/mnt/archive/Dokumente/JassSchieber-multiplayer/frontend/auth/deps.py": 1777486813.3518746,
-  "/mnt/archive/Dokumente/JassSchieber-multiplayer/frontend/auth/email.py": 1777486813.3518746,
-  "/mnt/archive/Dokumente/JassSchieber-multiplayer/frontend/auth/guest.py": 1777486813.3528745,
-  "/mnt/archive/Dokumente/JassSchieber-multiplayer/frontend/auth/lockout.py": 1777486813.3528745,
-  "/mnt/archive/Dokumente/JassSchieber-multiplayer/frontend/auth/manager.py": 1777486813.3528745,
-  "/mnt/archive/Dokumente/JassSchieber-multiplayer/frontend/auth/models.py": 1777486813.3528745,
-  "/mnt/archive/Dokumente/JassSchieber-multiplayer/frontend/auth/ratelimit.py": 1777486813.3528745,
-  "/mnt/archive/Dokumente/JassSchieber-multiplayer/frontend/auth/schemas.py": 1777486813.3538744,
-  "/mnt/archive/Dokumente/JassSchieber-multiplayer/frontend/auth/settings.py": 1777715086.6987605,
-  "/mnt/archive/Dokumente/JassSchieber-multiplayer/frontend/auth/tombstone.py": 1777486813.3548746,
-  "/mnt/archive/Dokumente/JassSchieber-multiplayer/frontend/auth/users.py": 1777486813.3548746,
-  "/mnt/archive/Dokumente/JassSchieber-multiplayer/run_tests.py": 1777391357.8982291,
-  "/mnt/archive/Dokumente/JassSchieber-multiplayer/test_script.js": 1777891275.1646109,
-  "/mnt/archive/Dokumente/JassSchieber-multiplayer/utils/__init__.py": 1777391357.8995106,
-  "/mnt/archive/Dokumente/JassSchieber-multiplayer/utils/card_utils.py": 1777391357.9001973,
-  "/mnt/archive/Dokumente/JassSchieber-multiplayer/utils/db_utils.py": 1777391357.9001973,
-  "/mnt/archive/Dokumente/JassSchieber-multiplayer/utils/example.py": 1777391357.9001973,
-  "/mnt/archive/Dokumente/JassSchieber-multiplayer/utils/game_utils.py": 1777884266.6665695,
-  "CLAUDE.md": 1777526369.486621,
-  "IMPORTS_README.md": 1777391357.8881195,
-  "ausbau/DB_README.md": 1777391357.8881195,
-  "command_start.txt": 1777391357.8955107,
-  "requirements-dev.txt": 1777486813.3548746,
-  "requirements-html5.txt": 1777486813.3548746,
-  "resume.txt": 1777526615.9417062,
-  "schieber.txt": 1777391357.8982291
+  "CLAUDE.md": {
+    "mtime": 1780155974.0555265,
+    "ast_hash": "780b7ac97b193896beb791a2d93e0a0f",
+    "semantic_hash": ""
+  },
+  "IMPORTS_README.md": {
+    "mtime": 1777391357.8881195,
+    "ast_hash": "d76d28dda86d83f413336be892711d14",
+    "semantic_hash": ""
+  },
+  "ausbau/DB_README.md": {
+    "mtime": 1777391357.8881195,
+    "ast_hash": "a67b92d46b7e806789afd8c49401bd63",
+    "semantic_hash": ""
+  },
+  "command_start.txt": {
+    "mtime": 1779705170.8862345,
+    "ast_hash": "f1c44944d608883abcba48880592c095",
+    "semantic_hash": ""
+  },
+  "requirements-dev.txt": {
+    "mtime": 1777486813.3548746,
+    "ast_hash": "85d33aa759688d73ea6cd3ed980bab6e",
+    "semantic_hash": ""
+  },
+  "requirements-html5.txt": {
+    "mtime": 1777486813.3548746,
+    "ast_hash": "e69399978462fcede17c480d0f53e0ca",
+    "semantic_hash": ""
+  },
+  "resume.txt": {
+    "mtime": 1777526615.9417062,
+    "ast_hash": "fe8281f998514cc3c638f0b9c74df98e",
+    "semantic_hash": ""
+  },
+  "schieber.txt": {
+    "mtime": 1777391357.8982291,
+    "ast_hash": "88cc4318150737e5468bbd7ecc79c929",
+    "semantic_hash": ""
+  },
+  ".claude/settings.local.json": {
+    "mtime": 1780160018.4555616,
+    "ast_hash": "2a71f124e9b07b721c63044bb88f6042",
+    "semantic_hash": ""
+  },
+  "Cards_refactored.py": {
+    "mtime": 1777715086.6980078,
+    "ast_hash": "c08d1fb9170aafb3db8ab3d2d9df30e0",
+    "semantic_hash": ""
+  },
+  "ausbau/__init__.py": {
+    "mtime": 1777391357.8881195,
+    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
+    "semantic_hash": ""
+  },
+  "ausbau/ai_strategies.py": {
+    "mtime": 1780155961.8325005,
+    "ast_hash": "beb8d0bcec8e37ea20bb614e4d7a88a7",
+    "semantic_hash": ""
+  },
+  "ausbau/database_manager.py": {
+    "mtime": 1777391357.8887284,
+    "ast_hash": "8116eb05dc47bc08ceec2f1ad30d6527",
+    "semantic_hash": ""
+  },
+  "ausbau/db_adapter.py": {
+    "mtime": 1777391357.8887284,
+    "ast_hash": "95b958ac27d8835d660ad4271f6e5c44",
+    "semantic_hash": ""
+  },
+  "ausbau/db_example.py": {
+    "mtime": 1777391357.8887284,
+    "ast_hash": "2a01698e938dce07f4d2ceba09673fd6",
+    "semantic_hash": ""
+  },
+  "ausbau/db_migration.py": {
+    "mtime": 1777391357.8887284,
+    "ast_hash": "df4e2466e647861c23e585ea74c7032a",
+    "semantic_hash": ""
+  },
+  "ausbau/game_session.py": {
+    "mtime": 1780160440.6529882,
+    "ast_hash": "99cbfa16ac15b168757f5706b24bffab",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/js/game.js": {
+    "mtime": 1777391357.8945107,
+    "ast_hash": "b9df5b96c1c07181c6e963bdbc26ca62",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/js/home.js": {
+    "mtime": 1779800322.3277104,
+    "ast_hash": "a761b30fa2cd24ff30cc4b96eb264730",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/js/html5games.matchgame.js": {
+    "mtime": 1777391357.895376,
+    "ast_hash": "5c74cbbb38d0751e93ee43ea7cf538df",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/js/html5games.pingpong.js": {
+    "mtime": 1777391357.895376,
+    "ast_hash": "3a99f4a22ab95266c10c2c6b80aaff02",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/js/html5jass.matchjass.js": {
+    "mtime": 1777391357.895376,
+    "ast_hash": "a92391f271dfddd007feafa0c4dbef79",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/js/jquery-1.6.min.js": {
+    "mtime": 1777391357.895376,
+    "ast_hash": "06276fe2c5bab945218f6741d7974387",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/js/lobby.js": {
+    "mtime": 1779803455.9367297,
+    "ast_hash": "2b446e55004e5ddf9614813d2a6d967d",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/js/schieber.js": {
+    "mtime": 1780160440.6529882,
+    "ast_hash": "48caf73ffa987568d70d5e3d4d10f884",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/schieber.json": {
+    "mtime": 1777391357.8955107,
+    "ast_hash": "c117f1c529db8eb03151cdab5a265f03",
+    "semantic_hash": ""
+  },
+  "ausbau/insert.py": {
+    "mtime": 1777391357.8955107,
+    "ast_hash": "3916d8dfac315865b3c1345982af3007",
+    "semantic_hash": ""
+  },
+  "ausbau/room.py": {
+    "mtime": 1779705170.8547947,
+    "ast_hash": "1b855606a142f839bbca9bada436d755",
+    "semantic_hash": ""
+  },
+  "ausbau/schieber.py": {
+    "mtime": 1777391357.8955107,
+    "ast_hash": "d6c675c22b637dff031f2a2977b54b83",
+    "semantic_hash": ""
+  },
+  "ausbau/schieber_db.py": {
+    "mtime": 1777391357.8955107,
+    "ast_hash": "ba3041743c544b835e5de07725d37dc9",
+    "semantic_hash": ""
+  },
+  "ausbau/schieber_json.py": {
+    "mtime": 1777391357.8955107,
+    "ast_hash": "70e9a0f5603ecf8a862a3731b91450a6",
+    "semantic_hash": ""
+  },
+  "ausbau/server.py": {
+    "mtime": 1779808041.3219109,
+    "ast_hash": "a3d117e067239103a1e62bb6cc1f7754",
+    "semantic_hash": ""
+  },
+  "frontend/auth/__init__.py": {
+    "mtime": 1777486813.3508744,
+    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
+    "semantic_hash": ""
+  },
+  "frontend/auth/admin.py": {
+    "mtime": 1777486813.3508744,
+    "ast_hash": "b578606baf7331a81329f63a323d8b1a",
+    "semantic_hash": ""
+  },
+  "frontend/auth/app.py": {
+    "mtime": 1777486813.3518746,
+    "ast_hash": "f4ec194c785663add7945cb703454775",
+    "semantic_hash": ""
+  },
+  "frontend/auth/db.py": {
+    "mtime": 1777486813.3518746,
+    "ast_hash": "da803a626b7a2c89100343f340c0407c",
+    "semantic_hash": ""
+  },
+  "frontend/auth/deps.py": {
+    "mtime": 1777486813.3518746,
+    "ast_hash": "71c87cfc7d5f6941d116f4b0db27f92d",
+    "semantic_hash": ""
+  },
+  "frontend/auth/email.py": {
+    "mtime": 1777486813.3518746,
+    "ast_hash": "d2a09c16393b5d88f44c403f1bd42b52",
+    "semantic_hash": ""
+  },
+  "frontend/auth/guest.py": {
+    "mtime": 1777486813.3528745,
+    "ast_hash": "f0c375d2aa9c4f670e0a7f3ba0869d64",
+    "semantic_hash": ""
+  },
+  "frontend/auth/lockout.py": {
+    "mtime": 1777486813.3528745,
+    "ast_hash": "0443b856218449dd4394c3eb2fa5f700",
+    "semantic_hash": ""
+  },
+  "frontend/auth/manager.py": {
+    "mtime": 1777486813.3528745,
+    "ast_hash": "7bcf8f89e849e4b6839b1c1c93d258d3",
+    "semantic_hash": ""
+  },
+  "frontend/auth/models.py": {
+    "mtime": 1777486813.3528745,
+    "ast_hash": "e007fb7d4ebb2a23d76694bfcc1b8c76",
+    "semantic_hash": ""
+  },
+  "frontend/auth/ratelimit.py": {
+    "mtime": 1777486813.3528745,
+    "ast_hash": "95e6d932d66d49f545deaf405bd2c112",
+    "semantic_hash": ""
+  },
+  "frontend/auth/schemas.py": {
+    "mtime": 1777486813.3538744,
+    "ast_hash": "0384aeda863ce67576a403df1b2ba124",
+    "semantic_hash": ""
+  },
+  "frontend/auth/settings.py": {
+    "mtime": 1777715086.6987605,
+    "ast_hash": "1331f447c773eb583bc308cf92d1c2e5",
+    "semantic_hash": ""
+  },
+  "frontend/auth/tombstone.py": {
+    "mtime": 1777486813.3548746,
+    "ast_hash": "3c0e44cbd41d01fc003c9caeec303865",
+    "semantic_hash": ""
+  },
+  "frontend/auth/users.py": {
+    "mtime": 1777486813.3548746,
+    "ast_hash": "7ce94e9a0e90a443468c4584b994a88c",
+    "semantic_hash": ""
+  },
+  "run_tests.py": {
+    "mtime": 1777391357.8982291,
+    "ast_hash": "7149e3d7ca9db3cf2cd1359ad340dd55",
+    "semantic_hash": ""
+  },
+  "test_script.js": {
+    "mtime": 1777891275.1646109,
+    "ast_hash": "d4a65cc07a9ca5b2f06d82ff4cfe6616",
+    "semantic_hash": ""
+  },
+  "tests/__init__.py": {
+    "mtime": 1777391357.8987768,
+    "ast_hash": "e04c24d1ba30a62527cbe7f7a10892dc",
+    "semantic_hash": ""
+  },
+  "tests/auth/__init__.py": {
+    "mtime": 1777486813.3548746,
+    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
+    "semantic_hash": ""
+  },
+  "tests/auth/conftest.py": {
+    "mtime": 1777486813.3558745,
+    "ast_hash": "b37d98e9b41f0d8782f9c4c2e0e6b862",
+    "semantic_hash": ""
+  },
+  "tests/auth/test_account_delete.py": {
+    "mtime": 1777486813.3558745,
+    "ast_hash": "ca603443831571a346f24ff00f15c6b8",
+    "semantic_hash": ""
+  },
+  "tests/auth/test_account_export.py": {
+    "mtime": 1777486813.3558745,
+    "ast_hash": "e2a557013edcc1284de83f60bb8dbbee",
+    "semantic_hash": ""
+  },
+  "tests/auth/test_admin.py": {
+    "mtime": 1777486813.3558745,
+    "ast_hash": "208421c1f491bc4bafc8d306e0b5034d",
+    "semantic_hash": ""
+  },
+  "tests/auth/test_change_email.py": {
+    "mtime": 1777486813.3558745,
+    "ast_hash": "6c020c96602ef4a6f81995a66abb9b4f",
+    "semantic_hash": ""
+  },
+  "tests/auth/test_email_backend.py": {
+    "mtime": 1777486813.3568745,
+    "ast_hash": "206308b34aa3edf3d6579389b06237ea",
+    "semantic_hash": ""
+  },
+  "tests/auth/test_guest.py": {
+    "mtime": 1777486813.3568745,
+    "ast_hash": "06cbd0e6300b4d5d3e7b63d24ef83497",
+    "semantic_hash": ""
+  },
+  "tests/auth/test_guest_cookie.py": {
+    "mtime": 1777486813.3568745,
+    "ast_hash": "ad58b81e9715b06c5fa820346530227d",
+    "semantic_hash": ""
+  },
+  "tests/auth/test_login.py": {
+    "mtime": 1777486813.3568745,
+    "ast_hash": "581e71a1e90f1466ddd00ad707ac4389",
+    "semantic_hash": ""
+  },
+  "tests/auth/test_logout.py": {
+    "mtime": 1777486813.3578746,
+    "ast_hash": "9ab906aadaa38391cac6dfe36744dbb0",
+    "semantic_hash": ""
+  },
+  "tests/auth/test_me.py": {
+    "mtime": 1777486813.3578746,
+    "ast_hash": "9627c4064a34f2bf7efb0e8fb8d70d83",
+    "semantic_hash": ""
+  },
+  "tests/auth/test_models.py": {
+    "mtime": 1777486813.3578746,
+    "ast_hash": "6dcae0df1c7fc2809a2b839918a51192",
+    "semantic_hash": ""
+  },
+  "tests/auth/test_pages.py": {
+    "mtime": 1777486813.3578746,
+    "ast_hash": "20893934b37de089b90b0e2d60dbf56d",
+    "semantic_hash": ""
+  },
+  "tests/auth/test_password_reset.py": {
+    "mtime": 1777486813.3578746,
+    "ast_hash": "f250dd385cd9987dd9a45b8d03892061",
+    "semantic_hash": ""
+  },
+  "tests/auth/test_principal_dep.py": {
+    "mtime": 1777486813.3588746,
+    "ast_hash": "f8af89cdb6cede64ceac1f643b28fe96",
+    "semantic_hash": ""
+  },
+  "tests/auth/test_ratelimit.py": {
+    "mtime": 1777486813.3588746,
+    "ast_hash": "93d973e5ec5dd2bd8fa72f58bfaf5809",
+    "semantic_hash": ""
+  },
+  "tests/auth/test_schemas.py": {
+    "mtime": 1777486813.3588746,
+    "ast_hash": "3338045819efc6db7812311d75bb8146",
+    "semantic_hash": ""
+  },
+  "tests/auth/test_settings.py": {
+    "mtime": 1778066225.9910674,
+    "ast_hash": "09d8fae16ef9ab4d0e512408983ec601",
+    "semantic_hash": ""
+  },
+  "tests/auth/test_signup.py": {
+    "mtime": 1777486813.3588746,
+    "ast_hash": "319f06dcd86b97472a52e8d449b1c185",
+    "semantic_hash": ""
+  },
+  "tests/auth/test_tombstone.py": {
+    "mtime": 1777486813.3588746,
+    "ast_hash": "380d96a1f36e40c7ef5bf359ed04001e",
+    "semantic_hash": ""
+  },
+  "tests/auth/test_verify.py": {
+    "mtime": 1777486813.3598745,
+    "ast_hash": "526653894c5a69fbdd04e44dbbd50df2",
+    "semantic_hash": ""
+  },
+  "tests/conftest.py": {
+    "mtime": 1777486813.3598745,
+    "ast_hash": "db7396a21d515960142c65a526a49bd0",
+    "semantic_hash": ""
+  },
+  "tests/multiplayer/__init__.py": {
+    "mtime": 1777486813.3598745,
+    "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
+    "semantic_hash": ""
+  },
+  "tests/multiplayer/conftest.py": {
+    "mtime": 1777486813.3598745,
+    "ast_hash": "744c27b5f7d35cc91bd16d8f92011246",
+    "semantic_hash": ""
+  },
+  "tests/multiplayer/test_ai_difficulty_endpoint.py": {
+    "mtime": 1777526369.487621,
+    "ast_hash": "2f45f19175fa83310aa065ce30b95e28",
+    "semantic_hash": ""
+  },
+  "tests/multiplayer/test_ai_difficulty_lifecycle.py": {
+    "mtime": 1777526369.487621,
+    "ast_hash": "99bfd5996d2d6b3d35de95789606e0e7",
+    "semantic_hash": ""
+  },
+  "tests/multiplayer/test_ai_hard_trump_draw.py": {
+    "mtime": 1780155718.7169845,
+    "ast_hash": "3cd135de18eb0462a3ee89e808372c65",
+    "semantic_hash": ""
+  },
+  "tests/multiplayer/test_ai_strategies.py": {
+    "mtime": 1780138366.2104123,
+    "ast_hash": "1ab3434c44ce806af409105c0a85ef84",
+    "semantic_hash": ""
+  },
+  "tests/multiplayer/test_await_seat_action.py": {
+    "mtime": 1779875934.344126,
+    "ast_hash": "40cf985a12c78e5028cbabf6a8c4bba9",
+    "semantic_hash": ""
+  },
+  "tests/multiplayer/test_conftest_smoke.py": {
+    "mtime": 1778064132.0585282,
+    "ast_hash": "e90bebdb140e867d42cea1133d884823",
+    "semantic_hash": ""
+  },
+  "tests/multiplayer/test_disconnect.py": {
+    "mtime": 1777486813.3598745,
+    "ast_hash": "8731c1e068ee69137fc528ec7ec3b113",
+    "semantic_hash": ""
+  },
+  "tests/multiplayer/test_e2e_4_humans.py": {
+    "mtime": 1777486813.3598745,
+    "ast_hash": "f02cdae1293a87d7b7407ebc638b3ecf",
+    "semantic_hash": ""
+  },
+  "tests/multiplayer/test_e2e_mixed_ai.py": {
+    "mtime": 1777526369.487621,
+    "ast_hash": "885157c880cec51d3593ff01cd373fe4",
+    "semantic_hash": ""
+  },
+  "tests/multiplayer/test_game_page.py": {
+    "mtime": 1778066364.0643296,
+    "ast_hash": "9a802ea4543ee3f94c0d48f80683623f",
+    "semantic_hash": ""
+  },
+  "tests/multiplayer/test_host_transfer.py": {
+    "mtime": 1777486813.3598745,
+    "ast_hash": "4cdf30c239dbdda38973b4c7d6609fff",
+    "semantic_hash": ""
+  },
+  "tests/multiplayer/test_join_leave.py": {
+    "mtime": 1777486813.3598745,
+    "ast_hash": "fef0089c950d1aebeb87061b2bb83f8e",
+    "semantic_hash": ""
+  },
+  "tests/multiplayer/test_lobby_page.py": {
+    "mtime": 1777526369.487621,
+    "ast_hash": "305cc5396219cfb0096f86fbf3d37d5a",
+    "semantic_hash": ""
+  },
+  "tests/multiplayer/test_play_trick.py": {
+    "mtime": 1777486813.3608744,
+    "ast_hash": "2a2d18d64ffac07696abd91e131504b6",
+    "semantic_hash": ""
+  },
+  "tests/multiplayer/test_reaper.py": {
+    "mtime": 1777486813.3608744,
+    "ast_hash": "866ae1b5b60f2daafb8f8e8fc97b2988",
+    "semantic_hash": ""
+  },
+  "tests/multiplayer/test_reclaim.py": {
+    "mtime": 1777486813.3608744,
+    "ast_hash": "3412d625ee3fdef9dd604729268594c8",
+    "semantic_hash": ""
+  },
+  "tests/multiplayer/test_replay.py": {
+    "mtime": 1777486813.3608744,
+    "ast_hash": "378fad35d07163d8cb92af9fa774002d",
+    "semantic_hash": ""
+  },
+  "tests/multiplayer/test_room_crud.py": {
+    "mtime": 1777486813.3608744,
+    "ast_hash": "f5ea1ee72d7a815ea69b5493aa9a7b62",
+    "semantic_hash": ""
+  },
+  "tests/multiplayer/test_room_model.py": {
+    "mtime": 1777526369.487621,
+    "ast_hash": "1a2fc4f042ab04ae2760ee81e399472e",
+    "semantic_hash": ""
+  },
+  "tests/multiplayer/test_routing_helpers.py": {
+    "mtime": 1777486813.3608744,
+    "ast_hash": "a8d79eddda900dfbf2b692c35451fcf0",
+    "semantic_hash": ""
+  },
+  "tests/multiplayer/test_run_spiel.py": {
+    "mtime": 1777486813.3608744,
+    "ast_hash": "8bea3ce76dd4f16d50c4733071106d1c",
+    "semantic_hash": ""
+  },
+  "tests/multiplayer/test_seat_helpers.py": {
+    "mtime": 1777486813.3608744,
+    "ast_hash": "719cc3b79fd53adbfb4d86660d7cf7cf",
+    "semantic_hash": ""
+  },
+  "tests/multiplayer/test_seat_swap.py": {
+    "mtime": 1777486813.3608744,
+    "ast_hash": "6a7ecc0e708292870c546f59fc1c11d4",
+    "semantic_hash": ""
+  },
+  "tests/multiplayer/test_start_game.py": {
+    "mtime": 1777486813.3608744,
+    "ast_hash": "9adf6ae29a98d503716db2d56d5ee4c7",
+    "semantic_hash": ""
+  },
+  "tests/multiplayer/test_trump_phase.py": {
+    "mtime": 1780160440.6529882,
+    "ast_hash": "d95aac861724d9e01268899cdc049bee",
+    "semantic_hash": ""
+  },
+  "tests/multiplayer/test_variants.py": {
+    "mtime": 1778065686.013111,
+    "ast_hash": "3a39ea4aab23f068d47250ecda578e77",
+    "semantic_hash": ""
+  },
+  "tests/multiplayer/test_weis_phase.py": {
+    "mtime": 1778066006.1996617,
+    "ast_hash": "5a697945d2f4c8608bf6ea6b4a5202fc",
+    "semantic_hash": ""
+  },
+  "tests/multiplayer/test_ws_attach.py": {
+    "mtime": 1777486813.3618746,
+    "ast_hash": "52ca908709496be84e53712cebde97a0",
+    "semantic_hash": ""
+  },
+  "tests/test_card_utils.py": {
+    "mtime": 1777391357.8988483,
+    "ast_hash": "369686538c5daefff7f9199ff5499c16",
+    "semantic_hash": ""
+  },
+  "tests/test_db_utils.py": {
+    "mtime": 1777391357.8988483,
+    "ast_hash": "5705236a7c3e2a2b5acb8394a6f18989",
+    "semantic_hash": ""
+  },
+  "tests/test_game_session.py": {
+    "mtime": 1779889325.7267494,
+    "ast_hash": "745a0802a521f18cba0bc32c8a639cbf",
+    "semantic_hash": ""
+  },
+  "tests/test_game_utils.py": {
+    "mtime": 1777884257.4525437,
+    "ast_hash": "06970905eed300a4c1b1762ae4ca370c",
+    "semantic_hash": ""
+  },
+  "tests/test_integration.py": {
+    "mtime": 1777391357.8995106,
+    "ast_hash": "4f513c81e2e8ee4d2d9021edcdc5d1e0",
+    "semantic_hash": ""
+  },
+  "utils/__init__.py": {
+    "mtime": 1777391357.8995106,
+    "ast_hash": "74e05580dc0b8d467d53121a1d77deae",
+    "semantic_hash": ""
+  },
+  "utils/card_utils.py": {
+    "mtime": 1777391357.9001973,
+    "ast_hash": "1d0f2bc82f3875cb99c5152e6fc792ee",
+    "semantic_hash": ""
+  },
+  "utils/db_utils.py": {
+    "mtime": 1777391357.9001973,
+    "ast_hash": "ffae821c9b2f5cedadaca0ff92d1b7ac",
+    "semantic_hash": ""
+  },
+  "utils/example.py": {
+    "mtime": 1777391357.9001973,
+    "ast_hash": "b265fcd181a68fb658e5d974d64b3025",
+    "semantic_hash": ""
+  },
+  "utils/game_utils.py": {
+    "mtime": 1777884266.6665695,
+    "ast_hash": "2123aadbc7bcb0d740f82e494b2a7abb",
+    "semantic_hash": ""
+  },
+  ".claude/agents/schieber-backend.md": {
+    "mtime": 1777391357.8878107,
+    "ast_hash": "f969033f40b96cfa81c94ac190b40754",
+    "semantic_hash": ""
+  },
+  ".claude/agents/schieber-frontend.md": {
+    "mtime": 1777391357.8879085,
+    "ast_hash": "4193df5d2a0630b6e7c8b5df45d8c9d6",
+    "semantic_hash": ""
+  },
+  ".claude/agents/schieber-qa.md": {
+    "mtime": 1777391357.8879085,
+    "ast_hash": "35b942f350944127dca116adea225bd7",
+    "semantic_hash": ""
+  },
+  ".claude/agents/schieber-reviewer.md": {
+    "mtime": 1777391357.8879085,
+    "ast_hash": "e4cb5141ebcf089ddcf187db53cd8b89",
+    "semantic_hash": ""
+  },
+  ".claude/skills/schieber-build/SKILL.md": {
+    "mtime": 1777391357.8881195,
+    "ast_hash": "95a5a84bd52e941de590f93541b70185",
+    "semantic_hash": ""
+  },
+  ".claude/skills/schieber-game-rules/SKILL.md": {
+    "mtime": 1779875980.9372275,
+    "ast_hash": "fd2db3eec105024b9cfa33dcc9f275f6",
+    "semantic_hash": ""
+  },
+  ".claude/skills/schieber-protocol/SKILL.md": {
+    "mtime": 1779796379.8400757,
+    "ast_hash": "05eac36310a9139cb4b0c449e7a43bb4",
+    "semantic_hash": ""
+  },
+  "ausbau/databasefueller.txt": {
+    "mtime": 1777391357.8887284,
+    "ast_hash": "47a9ff6fd6f02256c6a2daf23bf3e879",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/game.html": {
+    "mtime": 1779808006.3217854,
+    "ast_hash": "f76024480323c93800d227b659044a41",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/home.html": {
+    "mtime": 1779800322.3187103,
+    "ast_hash": "8b285d8e23cf04dd5168a25aafbd81d4",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/lobby.html": {
+    "mtime": 1779796379.8300757,
+    "ast_hash": "426e06eec3749c2284ebe66f3745e18f",
+    "semantic_hash": ""
+  },
+  "docs/superpowers/plans/2026-04-13-schieber-html5-frontend.md": {
+    "mtime": 1777391357.8963492,
+    "ast_hash": "93cd59266669517b26fbdb6a42a6b4c6",
+    "semantic_hash": ""
+  },
+  "docs/superpowers/plans/2026-04-28-schieber-accounts.md": {
+    "mtime": 1777486813.3498745,
+    "ast_hash": "aae29141d3e320bce3a57b68f8e29a01",
+    "semantic_hash": ""
+  },
+  "docs/superpowers/plans/2026-04-28-schieber-mobile-responsive.md": {
+    "mtime": 1777391357.8965662,
+    "ast_hash": "166868fbfdc6d8556212bb6cb3e95430",
+    "semantic_hash": ""
+  },
+  "docs/superpowers/plans/2026-04-28-schieber-multiplayer-part2.md": {
+    "mtime": 1777486813.3498745,
+    "ast_hash": "3e64ec7e5403ddece11d6f568d8895a0",
+    "semantic_hash": ""
+  },
+  "docs/superpowers/plans/2026-04-28-schieber-multiplayer.md": {
+    "mtime": 1777486813.3498745,
+    "ast_hash": "19ac66a8025f03d6149172782e0aef74",
+    "semantic_hash": ""
+  },
+  "docs/superpowers/plans/2026-04-30-schieber-ai-difficulty.md": {
+    "mtime": 1777500943.8469372,
+    "ast_hash": "e2afffde1df905496f536154d15b892c",
+    "semantic_hash": ""
+  },
+  "docs/superpowers/plans/2026-05-27-schieber-chat-panel-layout.md": {
+    "mtime": 1779873107.762338,
+    "ast_hash": "5b8ca3024e856de2756fc1e3b4563453",
+    "semantic_hash": ""
+  },
+  "docs/superpowers/specs/2026-04-13-schieber-frontend-design.md": {
+    "mtime": 1777391357.8965662,
+    "ast_hash": "a6ec50dc9e06210e0a114910ecb730fb",
+    "semantic_hash": ""
+  },
+  "docs/superpowers/specs/2026-04-28-schieber-accounts-design.md": {
+    "mtime": 1777486813.3508744,
+    "ast_hash": "543ed3b0b66fbf017f17b0cef5630047",
+    "semantic_hash": ""
+  },
+  "docs/superpowers/specs/2026-04-28-schieber-mobile-responsive-design.md": {
+    "mtime": 1777391357.897222,
+    "ast_hash": "a4bc502a03ab78c6a0998348e553dbdc",
+    "semantic_hash": ""
+  },
+  "docs/superpowers/specs/2026-04-28-schieber-multiplayer-design.md": {
+    "mtime": 1777486813.3508744,
+    "ast_hash": "aa5dca2052e629301c9a0e0a3d511baf",
+    "semantic_hash": ""
+  },
+  "docs/superpowers/specs/2026-04-29-schieber-ai-difficulty-design.md": {
+    "mtime": 1777495081.0947924,
+    "ast_hash": "7a1fe1ec945d36e39cf531eddf6d83b2",
+    "semantic_hash": ""
+  },
+  "frontend/auth/templates/account.html": {
+    "mtime": 1777486813.3538744,
+    "ast_hash": "ea34cb8e05d550b77353f0eb87acad05",
+    "semantic_hash": ""
+  },
+  "frontend/auth/templates/admin.html": {
+    "mtime": 1777486813.354772,
+    "ast_hash": "a27b7fe8d75c61a546d71bbcfb292611",
+    "semantic_hash": ""
+  },
+  "frontend/auth/templates/base.html": {
+    "mtime": 1777486813.354772,
+    "ast_hash": "2f5683e7e9d672db19254aaff9190ec0",
+    "semantic_hash": ""
+  },
+  "frontend/auth/templates/forgot.html": {
+    "mtime": 1777486813.354772,
+    "ast_hash": "c3e1ecb3c55ba19b8d8e303c8cfba7b6",
+    "semantic_hash": ""
+  },
+  "frontend/auth/templates/login.html": {
+    "mtime": 1777486813.3548746,
+    "ast_hash": "921268d93ea5acea07ae6ab7eee7dd1d",
+    "semantic_hash": ""
+  },
+  "frontend/auth/templates/reset.html": {
+    "mtime": 1777486813.3548746,
+    "ast_hash": "5fb825dd71e37d1eaa26dffb6d156818",
+    "semantic_hash": ""
+  },
+  "frontend/auth/templates/signup.html": {
+    "mtime": 1777486813.3548746,
+    "ast_hash": "6a997846e53ab9ae2f76b3ae61259ad3",
+    "semantic_hash": ""
+  },
+  "frontend/auth/templates/verify_done.html": {
+    "mtime": 1777486813.3548746,
+    "ast_hash": "1a9317dd156f548768330ac9e94df2ec",
+    "semantic_hash": ""
+  },
+  "tests/README.md": {
+    "mtime": 1777391357.8982291,
+    "ast_hash": "1d17fa92d1351eee8275f550234df9b7",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/E6.png": {
+    "mtime": 1777391357.8892863,
+    "ast_hash": "c46d039434e4f3f7975680feddad6e2b",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/E7.png": {
+    "mtime": 1777391357.889487,
+    "ast_hash": "1be88e92be21d3242c9f1ad20c98c318",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/E8.png": {
+    "mtime": 1777391357.889487,
+    "ast_hash": "4f85d749bed29044064a73e5d0cf88ec",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/E9.png": {
+    "mtime": 1777391357.889487,
+    "ast_hash": "7f5c00a7f2d1a164fdf4439eb27f5974",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/EA.png": {
+    "mtime": 1777391357.889487,
+    "ast_hash": "9aa4f1d47cda0df634bf6dfce77f55c6",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/EB.png": {
+    "mtime": 1777391357.889487,
+    "ast_hash": "17ea2846d7fdce6338f0d8c6893ce68e",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/EK.png": {
+    "mtime": 1777391357.889487,
+    "ast_hash": "de4b145ea21d3793a66334200729aee0",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/EO.png": {
+    "mtime": 1777391357.889487,
+    "ast_hash": "a86bc96452358b1eb39b4ce0b439c10c",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/EU.png": {
+    "mtime": 1777391357.889487,
+    "ast_hash": "7eeb3f792cb22fc0c7470e7e968a8e94",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/Eicheln/Acht.png": {
+    "mtime": 1777391357.889487,
+    "ast_hash": "4f85d749bed29044064a73e5d0cf88ec",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/Eicheln/Ass.png": {
+    "mtime": 1777391357.8895106,
+    "ast_hash": "9aa4f1d47cda0df634bf6dfce77f55c6",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/Eicheln/Banner.png": {
+    "mtime": 1777391357.8895106,
+    "ast_hash": "17ea2846d7fdce6338f0d8c6893ce68e",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/Eicheln/Koenig.png": {
+    "mtime": 1777391357.8895106,
+    "ast_hash": "de4b145ea21d3793a66334200729aee0",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/Eicheln/Neun.png": {
+    "mtime": 1777391357.8895106,
+    "ast_hash": "7f5c00a7f2d1a164fdf4439eb27f5974",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/Eicheln/Ober.png": {
+    "mtime": 1777391357.8895106,
+    "ast_hash": "a86bc96452358b1eb39b4ce0b439c10c",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/Eicheln/Sechs.png": {
+    "mtime": 1777391357.8895106,
+    "ast_hash": "c46d039434e4f3f7975680feddad6e2b",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/Eicheln/Sieben.png": {
+    "mtime": 1777391357.8895106,
+    "ast_hash": "1be88e92be21d3242c9f1ad20c98c318",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/Eicheln/Under.png": {
+    "mtime": 1777391357.8895106,
+    "ast_hash": "7eeb3f792cb22fc0c7470e7e968a8e94",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/Jasskarten.png": {
+    "mtime": 1777391357.8905108,
+    "ast_hash": "eec3bf9f53636d5582de1571627ede82",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/R6.png": {
+    "mtime": 1777391357.8905108,
+    "ast_hash": "1afb348e1aa3dbf8b91bd1273255b146",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/R7.png": {
+    "mtime": 1777391357.8905108,
+    "ast_hash": "023d3aa0f853fe33d21cfba3bc4b7689",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/R8.png": {
+    "mtime": 1777391357.8905108,
+    "ast_hash": "7368e3a27fc2ad9057654f7c8aadaea6",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/R9.png": {
+    "mtime": 1777391357.8905108,
+    "ast_hash": "0e729e873034ab4d6082f773f50c2f8f",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/RA.png": {
+    "mtime": 1777391357.8905108,
+    "ast_hash": "88a85a02964376b45c0c691184cc4423",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/RB.png": {
+    "mtime": 1777391357.8905108,
+    "ast_hash": "ab11ae61d454a65d34f72344eeff18ad",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/RK.png": {
+    "mtime": 1777391357.8905108,
+    "ast_hash": "2924abd39e90bb20a8f6cef927ef4e5b",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/RO.png": {
+    "mtime": 1777391357.8905108,
+    "ast_hash": "d3f084d056f0dd5a13a0f4faca0e9ae1",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/RU.png": {
+    "mtime": 1777391357.8905108,
+    "ast_hash": "923ff95bdb2159eea6401e7ef9f6ab46",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/Rosen/Acht.png": {
+    "mtime": 1777391357.8905108,
+    "ast_hash": "7368e3a27fc2ad9057654f7c8aadaea6",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/Rosen/Ass.png": {
+    "mtime": 1777391357.8918333,
+    "ast_hash": "88a85a02964376b45c0c691184cc4423",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/Rosen/Banner.png": {
+    "mtime": 1777391357.8918333,
+    "ast_hash": "ab11ae61d454a65d34f72344eeff18ad",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/Rosen/Koenig.png": {
+    "mtime": 1777391357.8918333,
+    "ast_hash": "2924abd39e90bb20a8f6cef927ef4e5b",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/Rosen/Neun.png": {
+    "mtime": 1777391357.8918333,
+    "ast_hash": "0e729e873034ab4d6082f773f50c2f8f",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/Rosen/Ober.png": {
+    "mtime": 1777391357.8918333,
+    "ast_hash": "d3f084d056f0dd5a13a0f4faca0e9ae1",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/Rosen/Sechs.png": {
+    "mtime": 1777391357.8918333,
+    "ast_hash": "1afb348e1aa3dbf8b91bd1273255b146",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/Rosen/Sieben.png": {
+    "mtime": 1777391357.8918333,
+    "ast_hash": "023d3aa0f853fe33d21cfba3bc4b7689",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/Rosen/Under.png": {
+    "mtime": 1777391357.8918333,
+    "ast_hash": "923ff95bdb2159eea6401e7ef9f6ab46",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/SE6.png": {
+    "mtime": 1777391357.8918333,
+    "ast_hash": "3117020c7de0f8f8fe7fcae65c624d1d",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/SE7.png": {
+    "mtime": 1777391357.8918333,
+    "ast_hash": "be7da5d321a1aa10936b6563738e564a",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/SE8.png": {
+    "mtime": 1777391357.8918333,
+    "ast_hash": "7055b39cab42538877f9a6054010f4f3",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/SE9.png": {
+    "mtime": 1777391357.8918333,
+    "ast_hash": "afda0cab7df7034bf1626b384bd47f75",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/SEA.png": {
+    "mtime": 1777391357.8918333,
+    "ast_hash": "ea0324667434d247f74246ca0ebb8b63",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/SEB.png": {
+    "mtime": 1777391357.8918333,
+    "ast_hash": "432d5091ef2feeefc8ed2d160e033cff",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/SEK.png": {
+    "mtime": 1777391357.8918333,
+    "ast_hash": "7ba35cd1bc7e10ee1aa9fda2d038ea88",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/SEU.png": {
+    "mtime": 1777391357.8918333,
+    "ast_hash": "fb0e63be96d60e68bdb37028cc1ef0a2",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/SI6.png": {
+    "mtime": 1777391357.8918333,
+    "ast_hash": "12f537f1fc9ef2bc18f9d683627e7bf9",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/SI7.png": {
+    "mtime": 1777391357.8918333,
+    "ast_hash": "903ec7376057611e7f68ae1e77a5d425",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/SI8.png": {
+    "mtime": 1777391357.8918333,
+    "ast_hash": "bc232c45f8cc47c5c353d7616ccb68ec",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/SI9.png": {
+    "mtime": 1777391357.8918333,
+    "ast_hash": "3e0c85411b4f40538026529cafa2fb80",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/SIA.png": {
+    "mtime": 1777391357.8925107,
+    "ast_hash": "b34ed9ca6dbbd0650c4e98573095cf75",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/SIB.png": {
+    "mtime": 1777391357.8925107,
+    "ast_hash": "85eeed9bc7fd33fc9650338794b22e06",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/SIK.png": {
+    "mtime": 1777391357.8925107,
+    "ast_hash": "c338e9bc0f783be5efd31920a3b34278",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/SIO.png": {
+    "mtime": 1777391357.8925107,
+    "ast_hash": "fdda2cc8b509f76e9ed78111c8f1e251",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/SIU.png": {
+    "mtime": 1777391357.8925107,
+    "ast_hash": "32cdb9f4ddb815c83b2ef16eb0afe350",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/Schellen/Acht.png": {
+    "mtime": 1777391357.8925107,
+    "ast_hash": "7055b39cab42538877f9a6054010f4f3",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/Schellen/Ass.png": {
+    "mtime": 1777391357.8932338,
+    "ast_hash": "ea0324667434d247f74246ca0ebb8b63",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/Schellen/Banner.png": {
+    "mtime": 1777391357.8932338,
+    "ast_hash": "432d5091ef2feeefc8ed2d160e033cff",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/Schellen/Koenig.png": {
+    "mtime": 1777391357.8932338,
+    "ast_hash": "7ba35cd1bc7e10ee1aa9fda2d038ea88",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/Schellen/Neun.png": {
+    "mtime": 1777391357.8932338,
+    "ast_hash": "afda0cab7df7034bf1626b384bd47f75",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/Schellen/Sechs.png": {
+    "mtime": 1777391357.8932338,
+    "ast_hash": "3117020c7de0f8f8fe7fcae65c624d1d",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/Schellen/Sieben.png": {
+    "mtime": 1777391357.8932338,
+    "ast_hash": "be7da5d321a1aa10936b6563738e564a",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/Schellen/Under.png": {
+    "mtime": 1777391357.8932338,
+    "ast_hash": "fb0e63be96d60e68bdb37028cc1ef0a2",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/Schilten/Acht.png": {
+    "mtime": 1777391357.8932338,
+    "ast_hash": "bc232c45f8cc47c5c353d7616ccb68ec",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/Schilten/Ass.png": {
+    "mtime": 1777391357.893651,
+    "ast_hash": "b34ed9ca6dbbd0650c4e98573095cf75",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/Schilten/Banner.png": {
+    "mtime": 1777391357.893651,
+    "ast_hash": "85eeed9bc7fd33fc9650338794b22e06",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/Schilten/Koenig.png": {
+    "mtime": 1777391357.893651,
+    "ast_hash": "c338e9bc0f783be5efd31920a3b34278",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/Schilten/Neun.png": {
+    "mtime": 1777391357.893651,
+    "ast_hash": "3e0c85411b4f40538026529cafa2fb80",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/Schilten/Ober.png": {
+    "mtime": 1777391357.893651,
+    "ast_hash": "fdda2cc8b509f76e9ed78111c8f1e251",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/Schilten/Sechs.png": {
+    "mtime": 1777391357.893651,
+    "ast_hash": "12f537f1fc9ef2bc18f9d683627e7bf9",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/Schilten/Sieben.png": {
+    "mtime": 1777391357.893651,
+    "ast_hash": "903ec7376057611e7f68ae1e77a5d425",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/Schilten/Under.png": {
+    "mtime": 1777391357.893651,
+    "ast_hash": "32cdb9f4ddb815c83b2ef16eb0afe350",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/bg.jpg": {
+    "mtime": 1777391357.893651,
+    "ast_hash": "9e196ab17d5f8868d38841266982f1ec",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/deck.png": {
+    "mtime": 1777391357.8945107,
+    "ast_hash": "5c0a500d11564624162ba54431e2dc7a",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/pixel_grid.jpg": {
+    "mtime": 1777391357.8945107,
+    "ast_hash": "7d64e75d54c83e7ce3e97f208e833b65",
+    "semantic_hash": ""
+  },
+  "ausbau/html5/images/table.jpg": {
+    "mtime": 1777391357.8945107,
+    "ast_hash": "de581e8a594b57089d64e78d8eac193a",
+    "semantic_hash": ""
+  }
 }
