@@ -58,6 +58,15 @@ def _drive_both_opponents_void(strat):
     # 4 cards → running trick reset internally.
 
 
+def _play_out_trumps(strat, held_suffixes):
+    """Replay every Schellen (trump) card NOT held by us via on_card_played,
+    leaving no trump outstanding outside our own hand."""
+    for rank in range(1, 10):
+        suffix = RANK_SUFFIX[rank]
+        if suffix not in held_suffixes:
+            strat.on_card_played("compe", f"SE{suffix}")
+
+
 # ── Rule A: draw trump (lead highest trump) ──────────────────────────────────
 
 def test_leads_highest_trump_fresh_spiel():
@@ -181,9 +190,8 @@ def test_stops_trump_when_all_outstanding_trumps_played():
     strat.pick_card(play, lead_suit=None, trick_so_far=[])  # cache operator
 
     # Simulate that all 8 other Schellen (trumps) were played.
-    for code in ["SEU", "SE9", "SEA", "SEK", "SEO", "SEB", "SE8", "SE7"]:
-        strat.on_card_played("compe", code)
-    assert len(strat._remaining_by_suit["Schellen"]) == 0
+    _play_out_trumps(strat, held_suffixes={"6"})
+    assert not strat._remaining_by_suit["Schellen"]
 
     # No trump outstanding → don't draw; cash the highest-point guaranteed
     # winner. RA (11 pts) outscores the trump Six (0 pts) — both are winners
@@ -199,9 +207,8 @@ def test_no_trump_outstanding_cashes_trump_winner():
     play, strat = _make("comps", "Schellen",
                         {"Schellen": ["U"], "Rosen": ["K"]})
     strat.pick_card(play, lead_suit=None, trick_so_far=[])  # cache operator
-    for code in ["SE9", "SEA", "SEK", "SEO", "SEB", "SE8", "SE7", "SE6"]:
-        strat.on_card_played("compe", code)
-    assert len(strat._remaining_by_suit["Schellen"]) == 0
+    _play_out_trumps(strat, held_suffixes={"U"})
+    assert not strat._remaining_by_suit["Schellen"]
     action = strat.pick_card(play, lead_suit=None, trick_so_far=[])
     assert action == {"type": "play_card", "card": "SEU"}
 

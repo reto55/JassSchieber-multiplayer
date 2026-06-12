@@ -571,6 +571,10 @@ class GameSession:
         seat.ai_difficulty = "medium"
         from ausbau.ai_strategies import make_strategy
         seat._strategy = make_strategy("medium", position)
+        # Mid-spiel construction: seed the card-tracking state on_spiel_start
+        # would normally build, so the strategy doesn't run on empty tracking.
+        if self.current_play is not None:
+            seat._strategy.on_spiel_start(self.current_play)
         self._reconnect_tasks.pop(position, None)
         await self.broadcast({"type": "seat_ai_takeover", "position": position})
         if was_host:
@@ -979,6 +983,7 @@ class GameSession:
 
     def _compute_ai_action(self, seat, valid_actions: dict) -> dict:
         """Delegate to the seat's strategy. Defensive rebuild if missing."""
+        play = valid_actions.get("play") or self.current_play
         if seat._strategy is None:
             from ausbau.ai_strategies import make_strategy
             import logging
@@ -987,9 +992,12 @@ class GameSession:
                 seat.position, seat.ai_difficulty,
             )
             seat._strategy = make_strategy(seat.ai_difficulty or "medium", seat.position)
+            # Mid-spiel construction: seed the card-tracking state
+            # on_spiel_start would normally build.
+            if play is not None:
+                seat._strategy.on_spiel_start(play)
 
         action_type = valid_actions.get("type")
-        play = valid_actions.get("play") or self.current_play
         if action_type == "trump":
             return seat._strategy.pick_trump(
                 play, valid_actions.get("schieben_allowed", True),

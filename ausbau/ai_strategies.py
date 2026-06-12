@@ -291,13 +291,11 @@ class HardStrategy(AIStrategy):
 
         my_trumps = [c for c in valid_cards if c.suit == operator]
         both_void = self._both_opponents_void_trump(play)
-        # Trumps unaccounted for outside our own hand. None means tracking is
-        # missing (mid-game strategy rebuild) — assume trumps are outstanding.
-        # This is NOT redundant with the void flags: the flags only flip when
-        # an opponent discards on a trump lead, so "all trumps already played"
-        # must be checked separately or the AI keeps drawing into thin air.
-        _outstanding = self._remaining_by_suit.get(operator)
-        trumps_outstanding = _outstanding is None or bool(_outstanding)
+        # Trumps unaccounted for outside our own hand (missing tracking counts
+        # as outstanding). NOT redundant with the void flags: those only flip
+        # when an opponent discards on a trump lead, so "all trumps already
+        # played" needs its own check or the AI keeps drawing into thin air.
+        trumps_outstanding = bool(self._remaining_by_suit.get(operator, True))
 
         # ── A. Draw trump ────────────────────────────────────────────────
         if my_trumps and trumps_outstanding and not both_void:
@@ -307,15 +305,12 @@ class HardStrategy(AIStrategy):
         # ── B / C. Drawing complete (or we hold no trump) ────────────────
         # Cash the highest-POINT guaranteed winner first (key is point value,
         # not trick rank — every guaranteed winner already takes the lead, so
-        # among them we prefer the one that banks the most points). While any
-        # trump is still outstanding it can only be in partner's hand (we are
-        # past rule A), so a guaranteed TRUMP winner must not be cashed — the
-        # lead would pull partner's trumps. Trump winners become fair game
-        # only once no trump is outstanding at all.
+        # among them we prefer the one that banks the most points). Trump
+        # winners are cashable only once no trump is outstanding — rule B.
         winners = [
             c for c in valid_cards
-            if self._is_guaranteed_winner(c, play)
-            and (c.suit != operator or not trumps_outstanding)
+            if (c.suit != operator or not trumps_outstanding)
+            and self._is_guaranteed_winner(c, play)
         ]
         if winners:
             pick = max(winners, key=lambda c: self._card_value(c, operator))
