@@ -262,15 +262,20 @@ class HardStrategy(AIStrategy):
         """Trump-drawing leading logic.
 
         Precedence (trump modes only):
-          A. Draw trump — if at least one opponent may still hold trump AND we
-             still hold trump, lead our HIGHEST trump by ``card.trumpf``
-             (classic Trumpf ziehen, top-down). Fires naturally for the
-             declaring side because Schieben does not change ``play.first``.
-          B. Both opponents void in trump — never open with trump. Lead the
-             highest-value guaranteed winner if we hold one; else dump a low
-             card into a non-trump suit an opponent has shown (and that still
-             has outstanding cards) so partner — a remaining trump holder —
-             can trump in; else today's lowest-card fallback.
+          A. Draw trump — if at least one opponent may still hold trump AND
+             trumps are still outstanding outside our hand AND we still hold
+             trump, lead our HIGHEST trump by ``card.trumpf`` (classic Trumpf
+             ziehen, top-down). Fires naturally for the declaring side because
+             Schieben does not change ``play.first``.
+          B. Both opponents void in trump — never open with trump while any
+             trump is still outstanding (those can only sit in PARTNER's hand;
+             leading trump would pull them). Lead the highest-value guaranteed
+             NON-TRUMP winner if we hold one; else dump a low card into a
+             non-trump suit an opponent has shown (and that still has
+             outstanding cards) so partner — a remaining trump holder — can
+             trump in; else today's lowest-card fallback. Once NO trump is
+             outstanding (partner void too), cashing trump winners is free
+             and allowed again.
           C. We hold no trump — rule A cannot fire; falls through to B.
 
         Non-trump modes (Oben / Unten) keep today's behaviour unchanged.
@@ -286,17 +291,32 @@ class HardStrategy(AIStrategy):
 
         my_trumps = [c for c in valid_cards if c.suit == operator]
         both_void = self._both_opponents_void_trump(play)
+        # Trumps unaccounted for outside our own hand. None means tracking is
+        # missing (mid-game strategy rebuild) — assume trumps are outstanding.
+        # This is NOT redundant with the void flags: the flags only flip when
+        # an opponent discards on a trump lead, so "all trumps already played"
+        # must be checked separately or the AI keeps drawing into thin air.
+        _outstanding = self._remaining_by_suit.get(operator)
+        trumps_outstanding = _outstanding is None or bool(_outstanding)
 
         # ── A. Draw trump ────────────────────────────────────────────────
-        if my_trumps and not both_void:
+        if my_trumps and trumps_outstanding and not both_void:
             pick = max(my_trumps, key=lambda c: c.trumpf)
             return {"type": "play_card", "card": card_to_code(pick)}
 
         # ── B / C. Drawing complete (or we hold no trump) ────────────────
         # Cash the highest-POINT guaranteed winner first (key is point value,
         # not trick rank — every guaranteed winner already takes the lead, so
-        # among them we prefer the one that banks the most points).
-        winners = [c for c in valid_cards if self._is_guaranteed_winner(c, play)]
+        # among them we prefer the one that banks the most points). While any
+        # trump is still outstanding it can only be in partner's hand (we are
+        # past rule A), so a guaranteed TRUMP winner must not be cashed — the
+        # lead would pull partner's trumps. Trump winners become fair game
+        # only once no trump is outstanding at all.
+        winners = [
+            c for c in valid_cards
+            if self._is_guaranteed_winner(c, play)
+            and (c.suit != operator or not trumps_outstanding)
+        ]
         if winners:
             pick = max(winners, key=lambda c: self._card_value(c, operator))
             return {"type": "play_card", "card": card_to_code(pick)}

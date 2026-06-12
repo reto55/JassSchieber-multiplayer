@@ -154,6 +154,58 @@ def test_does_not_lead_trump_when_both_void():
     assert action == {"type": "play_card", "card": "R6"}
 
 
+def test_both_void_never_cashes_guaranteed_trump_winner():
+    # Regression: both opponents void but trumps are still OUTSTANDING — they
+    # can only sit in partner's hand. The trump Under (SEU, top trump, 20 pts)
+    # is a guaranteed winner and outscores the Rosen Ass (11 pts) in the
+    # winners-cash, but leading it would pull partner's trumps. The AI must
+    # cash the non-trump winner instead.
+    play, strat = _make("comps", "Schellen",
+                        {"Schellen": ["U"], "Rosen": ["A"]})
+    strat.pick_card(play, lead_suit=None, trick_so_far=[])  # cache operator
+    _drive_both_opponents_void(strat)
+    assert strat._remaining_by_suit["Schellen"]  # partner may hold these
+    action = strat.pick_card(play, lead_suit=None, trick_so_far=[])
+    assert action == {"type": "play_card", "card": "RA"}
+
+
+# ── Trump stopping when all outstanding trumps played ────────────────────────
+
+def test_stops_trump_when_all_outstanding_trumps_played():
+    # Regression (removed in 941397e, restored): if all trumps outside our
+    # hand are gone, the AI must stop drawing even though no opponent was
+    # ever flagged void through a non-trump discard on a trump lead.
+    # Schellen trump. comps holds Schellen 6, plus Rosen Ass.
+    play, strat = _make("comps", "Schellen",
+                        {"Schellen": ["6"], "Rosen": ["A"]})
+    strat.pick_card(play, lead_suit=None, trick_so_far=[])  # cache operator
+
+    # Simulate that all 8 other Schellen (trumps) were played.
+    for code in ["SEU", "SE9", "SEA", "SEK", "SEO", "SEB", "SE8", "SE7"]:
+        strat.on_card_played("compe", code)
+    assert len(strat._remaining_by_suit["Schellen"]) == 0
+
+    # No trump outstanding → don't draw; cash the highest-point guaranteed
+    # winner. RA (11 pts) outscores the trump Six (0 pts) — both are winners
+    # now that trump winners are fair game again.
+    action = strat.pick_card(play, lead_suit=None, trick_so_far=[])
+    assert action == {"type": "play_card", "card": "RA"}
+
+
+def test_no_trump_outstanding_cashes_trump_winner():
+    # Counterpart: once NO trump is outstanding (partner void too), a trump
+    # winner may be cashed when it banks the most points. Trump Under = 20 pts
+    # beats Rosen Koenig = 4 pts.
+    play, strat = _make("comps", "Schellen",
+                        {"Schellen": ["U"], "Rosen": ["K"]})
+    strat.pick_card(play, lead_suit=None, trick_so_far=[])  # cache operator
+    for code in ["SE9", "SEA", "SEK", "SEO", "SEB", "SE8", "SE7", "SE6"]:
+        strat.on_card_played("compe", code)
+    assert len(strat._remaining_by_suit["Schellen"]) == 0
+    action = strat.pick_card(play, lead_suit=None, trick_so_far=[])
+    assert action == {"type": "play_card", "card": "SEU"}
+
+
 # ── Rule C: no trump in hand → falls through to B ─────────────────────────────
 
 def test_no_trump_in_hand_leads_guaranteed_winner():
