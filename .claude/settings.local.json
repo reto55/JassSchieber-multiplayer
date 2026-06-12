@@ -113,7 +113,12 @@
       "Bash(rtk curl *)",
       "mcp__plugin_playwright_playwright__browser_close",
       "Bash(pkill -f \"uvicorn ausbau.server\")",
-      "Bash(PYTHONPATH=. .venv/bin/python _workspace/repro2.py)"
+      "Bash(PYTHONPATH=. .venv/bin/python _workspace/repro2.py)",
+      "Bash(command -v python3 python pytest)",
+      "Bash(sed -n 555,580p /home/reto/Dokumente/JassSchieber-multiplayer/ausbau/game_session.py)",
+      "Bash(sed -n 80,105p /home/reto/Dokumente/JassSchieber-multiplayer/ausbau/room.py)",
+      "Bash(sed -n 560,580p ausbau/game_session.py)",
+      "Bash(sed -n 975,1000p ausbau/game_session.py)"
     ]
   }
 }
