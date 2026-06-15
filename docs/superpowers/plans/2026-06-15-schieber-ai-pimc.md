@@ -30,7 +30,7 @@ Position constants already exist in `ausbau/game_session.py`: `PLAYERS = ['comps
 - Create: `ausbau/ai_pimc.py`
 - Test: `tests/multiplayer/test_ai_pimc.py`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/multiplayer/test_ai_pimc.py
@@ -73,12 +73,12 @@ def test_engine_state_holds_fields():
     assert len(state.unseen) == 1
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `python -m pytest tests/multiplayer/test_ai_pimc.py::test_engine_state_holds_fields -v`
 Expected: FAIL with `ModuleNotFoundError` / `AttributeError: module 'ausbau.ai_pimc' has no attribute 'EngineState'`.
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```python
 # ausbau/ai_pimc.py
@@ -119,12 +119,12 @@ class EngineState:
     unseen: list                  # [Card,...] cards to distribute among `others`
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `python -m pytest tests/multiplayer/test_ai_pimc.py::test_engine_state_holds_fields -v`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add ausbau/ai_pimc.py tests/multiplayer/test_ai_pimc.py
@@ -143,7 +143,7 @@ Samples the 3 hidden hands honoring per-suit voids, hand-size capacities, and th
 - Modify: `ausbau/ai_pimc.py`
 - Test: `tests/multiplayer/test_ai_pimc.py`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 def _basic_state(my_hand, others, hand_sizes, voids=None,
@@ -240,12 +240,12 @@ def test_sampler_is_deterministic_under_seed():
     assert norm(d1) == norm(d2)
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `python -m pytest tests/multiplayer/test_ai_pimc.py -k sampler -v`
 Expected: FAIL with `AttributeError: module 'ausbau.ai_pimc' has no attribute 'DealSampler'`.
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Add to `ausbau/ai_pimc.py`:
 
@@ -308,12 +308,12 @@ class DealSampler:
             f"no consistent deal in {self.MAX_ATTEMPTS} attempts")
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `python -m pytest tests/multiplayer/test_ai_pimc.py -k sampler -v`
 Expected: PASS (4 tests)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add ausbau/ai_pimc.py tests/multiplayer/test_ai_pimc.py
@@ -332,7 +332,7 @@ Plays a sampled full deal to completion from the current position with a forced 
 - Modify: `ausbau/ai_pimc.py`
 - Test: `tests/multiplayer/test_ai_pimc.py`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 def test_rollout_is_deterministic():
@@ -376,12 +376,12 @@ def test_rollout_points_are_bounded_and_nonnegative():
     assert 0 <= pts <= 300   # sanity: never negative, never absurd
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `python -m pytest tests/multiplayer/test_ai_pimc.py -k rollout -v`
 Expected: FAIL with `AttributeError: module 'ausbau.ai_pimc' has no attribute 'rollout'`.
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Add to `ausbau/ai_pimc.py`:
 
@@ -468,12 +468,12 @@ def rollout(state: EngineState, deal: dict, lead_card) -> int:
     return my_points
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `python -m pytest tests/multiplayer/test_ai_pimc.py -k rollout -v`
 Expected: PASS (2 tests)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add ausbau/ai_pimc.py tests/multiplayer/test_ai_pimc.py
@@ -492,7 +492,7 @@ Averages rollout scores per candidate lead across sampled deals, time-boxed; ret
 - Modify: `ausbau/ai_pimc.py`
 - Test: `tests/multiplayer/test_ai_pimc.py`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 def _endgame_state():
@@ -548,12 +548,12 @@ def test_pimc_is_deterministic_under_seed():
     assert card_to_code(p1) == card_to_code(p2)
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `python -m pytest tests/multiplayer/test_ai_pimc.py -k pimc -v`
 Expected: FAIL with `AttributeError: module 'ausbau.ai_pimc' has no attribute 'pimc_choose_lead'`.
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Add to `ausbau/ai_pimc.py`:
 
@@ -601,17 +601,17 @@ def pimc_choose_lead(state: EngineState, candidate_leads, *,
     return None
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `python -m pytest tests/multiplayer/test_ai_pimc.py -k pimc -v`
 Expected: PASS (3 tests)
 
-- [ ] **Step 5: Run the whole engine test file**
+- [x] **Step 5: Run the whole engine test file**
 
 Run: `python -m pytest tests/multiplayer/test_ai_pimc.py -v`
 Expected: PASS (all engine tests)
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add ausbau/ai_pimc.py tests/multiplayer/test_ai_pimc.py
@@ -632,7 +632,7 @@ Add per-player hand sizes, all-suit void flags, and the trump Under-holdback mar
 
 Reference: current `on_spiel_start` is at `ausbau/ai_strategies.py:106-126`; `on_card_played` at `:128-181`; `__init__` at `:83-98`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 # Append to tests/multiplayer/test_ai_pimc.py
@@ -689,12 +689,12 @@ def test_tracking_marks_under_holdback_on_trump_lead_discard():
     assert "Schellen" not in strat._voids_all["compo"]
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `python -m pytest tests/multiplayer/test_ai_pimc.py -k tracking -v`
 Expected: FAIL with `AttributeError: 'HardStrategy' object has no attribute '_hand_sizes'`.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 In `ausbau/ai_strategies.py`, `HardStrategy.__init__` — add after the existing `_running_trick` init:
 
@@ -739,17 +739,17 @@ In `on_card_played`, inside the `if player_position != self.position:` block (al
 
 (The existing `is_lead` / `lead_suit_name` locals are computed earlier in the method — reuse them; do not recompute.)
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `python -m pytest tests/multiplayer/test_ai_pimc.py -k tracking -v`
 Expected: PASS (4 tests)
 
-- [ ] **Step 5: Run the full strategy suite (no regressions)**
+- [x] **Step 5: Run the full strategy suite (no regressions)**
 
 Run: `python -m pytest tests/multiplayer/test_ai_strategies.py tests/multiplayer/test_ai_hard_trump_draw.py -q`
 Expected: PASS (existing behavior unchanged — new state is additive)
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add ausbau/ai_strategies.py tests/multiplayer/test_ai_pimc.py
@@ -768,7 +768,7 @@ Adapts the strategy's tracking into an `EngineState`. Asserts the consistency in
 - Modify: `ausbau/ai_strategies.py` (new method on `HardStrategy`)
 - Test: `tests/multiplayer/test_ai_pimc.py`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 def test_build_engine_state_is_consistent():
@@ -790,12 +790,12 @@ def test_build_engine_state_is_consistent():
     assert "compe" in state.no_trump_except_under
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `python -m pytest tests/multiplayer/test_ai_pimc.py -k build_engine_state -v`
 Expected: FAIL with `AttributeError: 'HardStrategy' object has no attribute '_build_engine_state'`.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 Add this method to `HardStrategy` in `ausbau/ai_strategies.py` (place it just above `_lead`):
 
@@ -825,12 +825,12 @@ Add this method to `HardStrategy` in `ausbau/ai_strategies.py` (place it just ab
         )
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `python -m pytest tests/multiplayer/test_ai_pimc.py -k build_engine_state -v`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add ausbau/ai_strategies.py tests/multiplayer/test_ai_pimc.py
@@ -851,7 +851,7 @@ Rename the current rule A/B body to `_lead_heuristic` and add the PIMC branch in
 
 Reference: current `_lead` spans `ausbau/ai_strategies.py:261-379`. The non-trump early-return (`if operator not in SUITS: return self._lead_legacy(...)`) must stay at the top of the NEW `_lead`, NOT inside `_lead_heuristic`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 def test_lead_uses_pimc_when_enabled(monkeypatch):
@@ -891,12 +891,12 @@ def test_lead_falls_back_when_pimc_returns_none(monkeypatch):
     assert result["card"] == "SEA"   # heuristic fallback fired
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `python -m pytest tests/multiplayer/test_ai_pimc.py -k "lead_uses_pimc or lead_falls_back" -v`
 Expected: FAIL (`_lead` still runs the heuristic directly; `_pimc_enabled` not consulted / `pimc_choose_lead` not called).
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 In `ausbau/ai_strategies.py`, rename the existing method `def _lead(self, play, valid_cards) -> dict:` to `def _lead_heuristic(self, play, valid_cards) -> dict:`, and **remove** its leading non-trump early-return block
 
@@ -936,17 +936,17 @@ from `_lead_heuristic` (that check moves to the new `_lead`). Keep the rest of t
 
 (Importing `ai_pimc` as a module inside the method, and patching `ausbau.ai_pimc.pimc_choose_lead`, lets the monkeypatch tests above intercept the call.)
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `python -m pytest tests/multiplayer/test_ai_pimc.py -k "lead_uses_pimc or lead_falls_back" -v`
 Expected: PASS (3 tests)
 
-- [ ] **Step 5: Run the full engine + strategy suites**
+- [x] **Step 5: Run the full engine + strategy suites**
 
 Run: `python -m pytest tests/multiplayer/test_ai_pimc.py -v`
 Expected: PASS (all)
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add ausbau/ai_strategies.py tests/multiplayer/test_ai_pimc.py
@@ -965,7 +965,7 @@ The existing `test_ai_hard_trump_draw.py` tests assert heuristic rule A/B behavi
 - Modify: `tests/multiplayer/test_ai_hard_trump_draw.py` (`_make` helper)
 - Modify: `CLAUDE.md` (HardStrategy bullet)
 
-- [ ] **Step 1: Disable PIMC in the existing fixture**
+- [x] **Step 1: Disable PIMC in the existing fixture**
 
 In `tests/multiplayer/test_ai_hard_trump_draw.py`, in `_make`, set the flag right after constructing the strategy (current `_make` is at lines 41-47):
 
@@ -980,12 +980,12 @@ def _make(position, operator, suit_to_suffixes):
     return play, strat
 ```
 
-- [ ] **Step 2: Run the existing trump-draw suite to confirm it stays green**
+- [x] **Step 2: Run the existing trump-draw suite to confirm it stays green**
 
 Run: `python -m pytest tests/multiplayer/test_ai_hard_trump_draw.py -q`
 Expected: PASS (all 22 — heuristic behavior unchanged because PIMC is off)
 
-- [ ] **Step 3: Update the module docstring note**
+- [x] **Step 3: Update the module docstring note**
 
 In `tests/multiplayer/test_ai_hard_trump_draw.py`, append to the module docstring (after the existing "Following-suit behaviour..." paragraph):
 
@@ -995,7 +995,7 @@ exercise the retained heuristic leading path. The PIMC engine (sub-project D)
 is covered separately in ``tests/multiplayer/test_ai_pimc.py``.
 ```
 
-- [ ] **Step 4: Update CLAUDE.md**
+- [x] **Step 4: Update CLAUDE.md**
 
 In `CLAUDE.md`, in the **Sub-project C — AI difficulty** bullet's HardStrategy description, append a sentence at the end of that bullet:
 
@@ -1011,12 +1011,12 @@ policy, and leads the highest expected-value card. Synchronous and time-boxed
 `tests/multiplayer/test_ai_pimc.py`. Not a game-rules change.
 ```
 
-- [ ] **Step 5: Run the full test suite**
+- [x] **Step 5: Run the full test suite**
 
 Run: `python run_tests.py`
 Expected: PASS (all; engine suite added, existing suites unchanged)
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add tests/multiplayer/test_ai_hard_trump_draw.py CLAUDE.md
@@ -1034,7 +1034,7 @@ Confirms the full path works against a real `Play` and `pick_card` (not monkeypa
 **Files:**
 - Test: `tests/multiplayer/test_ai_pimc.py`
 
-- [ ] **Step 1: Write the test**
+- [x] **Step 1: Write the test**
 
 ```python
 def test_pick_card_leading_with_pimc_returns_legal_card():
@@ -1050,17 +1050,17 @@ def test_pick_card_leading_with_pimc_returns_legal_card():
     assert result["card"] in legal
 ```
 
-- [ ] **Step 2: Run the test**
+- [x] **Step 2: Run the test**
 
 Run: `python -m pytest tests/multiplayer/test_ai_pimc.py::test_pick_card_leading_with_pimc_returns_legal_card -v`
 Expected: PASS (a legal lead is returned via the live PIMC path)
 
-- [ ] **Step 3: Run the full multiplayer + AI suites once more**
+- [x] **Step 3: Run the full multiplayer + AI suites once more**
 
 Run: `python -m pytest tests/multiplayer/ -q`
 Expected: PASS (all)
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add tests/multiplayer/test_ai_pimc.py
