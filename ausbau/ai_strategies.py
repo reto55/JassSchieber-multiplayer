@@ -6,9 +6,12 @@ per-seat via `Seat.ai_difficulty`; instantiated via `make_strategy`.
 """
 from __future__ import annotations
 
+import logging
 import random
 from typing import Optional
 
+
+logger = logging.getLogger(__name__)
 
 TRUMP_OPTIONS = ("Eicheln", "Rosen", "Schellen", "Schilten", "Oben", "Unten")
 
@@ -336,6 +339,8 @@ class HardStrategy(AIStrategy):
                 pick = ai_pimc.pimc_choose_lead(
                     state, valid_cards, rng=self._rng)
             except Exception:
+                logger.warning(
+                    "PIMC lead failed, falling back to heuristic", exc_info=True)
                 pick = None
             if pick is not None:
                 return {"type": "play_card", "card": card_to_code(pick)}

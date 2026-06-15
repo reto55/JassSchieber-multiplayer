@@ -12,6 +12,10 @@ Sub-project C extension. Covers the LEADING branch of
 Following-suit behaviour is unchanged and is covered by the existing
 `tests/multiplayer/test_ai_strategies.py` `test_hard_follow_*` tests.
 
+These tests pin ``HardStrategy._pimc_enabled = False`` (via ``_make``) so they
+exercise the retained heuristic leading path. The PIMC engine (sub-project D)
+is covered separately in ``tests/multiplayer/test_ai_pimc.py``.
+
 Card codes follow the repo scheme (see ``SUIT_PREFIX`` / ``RANK_SUFFIX`` in
 ``ausbau.game_session``): Eicheln=E, Rosen=R, Schellen=SE, Schilten=SI; rank
 suffixes 6 7 8 9 B U O K A (low→high). So the Schellen King is ``SEK``, the
@@ -43,6 +47,7 @@ def _make(position, operator, suit_to_suffixes):
     play.operator = operator
     _set_hand(play, position, suit_to_suffixes)
     strat = HardStrategy(position)
+    strat._pimc_enabled = False   # these tests target the heuristic fallback
     strat.on_spiel_start(play)
     return play, strat
 
