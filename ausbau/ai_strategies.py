@@ -78,6 +78,15 @@ class HardStrategy(AIStrategy):
     + trump-drawing ("Trumpf ziehen") leading logic.
 
     Implementation lands across Tasks 3-6 plus the trump-draw extension.
+
+    Tier-1 trump-draw refinement (sub-project C): the AI also stops opening
+    with trump when EXACTLY ONE trump is outstanding outside its own hand AND
+    it does not hold the boss (highest-by-``.trumpf``) trump — leading there
+    can only lose the trick or waste partner's trump. Known residual, deferred
+    to sub-project D: the post-stop fallthrough cashes a ruff-blind non-trump
+    ``_is_guaranteed_winner`` that the lone outstanding opponent trump could
+    still ruff. This is accepted (better EV than leading trump); a ruff-aware
+    unruffable-winner predicate + exact-hand reconstruction is sub-project D.
     """
 
     def __init__(self, position: str):
@@ -266,7 +275,10 @@ class HardStrategy(AIStrategy):
              trumps are still outstanding outside our hand AND we still hold
              trump, lead our HIGHEST trump by ``card.trumpf`` (classic Trumpf
              ziehen, top-down). Fires naturally for the declaring side because
-             Schieben does not change ``play.first``.
+             Schieben does not change ``play.first``. Tier-1 stop: suppressed
+             when EXACTLY ONE trump is outstanding and we lack the boss trump
+             (leading then only loses the trick or wastes partner's trump);
+             with 2+ outstanding we keep drawing into the boss to flush it.
           B. Both opponents void in trump — never open with trump while any
              trump is still outstanding (those can only sit in PARTNER's hand;
              leading trump would pull them). Lead the highest-value guaranteed
@@ -281,7 +293,7 @@ class HardStrategy(AIStrategy):
         Non-trump modes (Oben / Unten) keep today's behaviour unchanged.
         """
         from Cards_refactored import SUITS
-        from ausbau.game_session import card_to_code
+        from ausbau.game_session import card_to_code, code_to_card
 
         operator = play.operator
 
@@ -297,8 +309,31 @@ class HardStrategy(AIStrategy):
         # played" needs its own check or the AI keeps drawing into thin air.
         trumps_outstanding = bool(self._remaining_by_suit.get(operator, True))
 
+        # Tier-1 stop (sub-project C): when EXACTLY ONE trump is outstanding
+        # outside our own hand AND we do NOT hold the boss (highest-by-.trumpf)
+        # trump, opening with trump can only lose the trick (an opponent holds
+        # the lone trump) or waste partner's trump (partner holds it) — stop
+        # either way. Uses only _remaining_by_suit[operator] + our own hand; no
+        # void-guessing, no new tracking state.
+        #   NOTE (known residual, deferred to sub-project D): the post-stop
+        #   fallthrough cashes a non-trump _is_guaranteed_winner that is
+        #   ruff-blind — with one outstanding opponent trump it could still be
+        #   ruffed. Accepted: strictly better EV than leading trump here. A
+        #   ruff-aware unruffable-winner predicate is sub-project D work; do NOT
+        #   fix it ad hoc.
+        remaining_trumps = self._remaining_by_suit.get(operator, set())
+        lone_lack_boss = False
+        if len(remaining_trumps) == 1:
+            if my_trumps:
+                lone = code_to_card(next(iter(remaining_trumps)))
+                my_top = max(my_trumps, key=lambda c: c.trumpf)
+                lone_lack_boss = not (my_top.trumpf > lone.trumpf)
+            else:
+                # One trump out, we hold none → we definitely lack the boss.
+                lone_lack_boss = True
+
         # ── A. Draw trump ────────────────────────────────────────────────
-        if my_trumps and trumps_outstanding and not both_void:
+        if my_trumps and trumps_outstanding and not both_void and not lone_lack_boss:
             pick = max(my_trumps, key=lambda c: c.trumpf)
             return {"type": "play_card", "card": card_to_code(pick)}
 

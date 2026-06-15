@@ -100,6 +100,61 @@ def test_keeps_drawing_while_one_opponent_may_hold_trump():
     assert action == {"type": "play_card", "card": "SE6"}
 
 
+# ── Rule A (Tier 1): exactly one trump out + AI lacks boss → stop drawing ─────
+
+def test_one_trump_out_lacks_boss_does_not_lead_trump():
+    # Schellen trump. comps holds the Schellen Koenig (trumpf=15) and a Rosen
+    # Ass. Exactly one trump is outstanding — the trump Under (SEU, trumpf=18) —
+    # which outranks our top trump. Leading trump can only lose the trick (an
+    # opponent holds SEU) or waste partner's trump (partner holds it). The AI
+    # must NOT lead trump; it cashes the guaranteed non-trump winner instead.
+    play, strat = _make("comps", "Schellen",
+                        {"Schellen": ["K"], "Rosen": ["A"]})
+    strat.pick_card(play, lead_suit=None, trick_so_far=[])  # cache operator
+    strat._remaining_by_suit["Schellen"] = {"SEU"}  # lone outstanding trump
+    action = strat.pick_card(play, lead_suit=None, trick_so_far=[])
+    assert action["type"] == "play_card"
+    assert action["card"] != "SEK"            # never the trump
+    assert action["card"] == "RA"             # cash the non-trump winner
+
+
+def test_one_trump_out_lacks_boss_no_trump_in_hand_unaffected():
+    # comps holds no trump at all but exactly one trump is outstanding. Rule A
+    # cannot fire anyway (no trump to lead); behaviour is the legacy fallthrough.
+    play, strat = _make("comps", "Schellen",
+                        {"Rosen": ["A"], "Eicheln": ["6"]})
+    strat.pick_card(play, lead_suit=None, trick_so_far=[])  # cache operator
+    strat._remaining_by_suit["Schellen"] = {"SEU"}
+    action = strat.pick_card(play, lead_suit=None, trick_so_far=[])
+    assert action == {"type": "play_card", "card": "RA"}
+
+
+def test_one_trump_out_holds_boss_still_leads_trump():
+    # Counterpart: exactly one trump out, but it is LOWER than our top trump —
+    # we hold the boss. Rule A still fires: lead the boss to flush the last
+    # outstanding trump. comps holds the trump Under (SEU, trumpf=18); the lone
+    # outstanding trump is the Schellen Koenig (SEK, trumpf=15).
+    play, strat = _make("comps", "Schellen",
+                        {"Schellen": ["U"], "Rosen": ["A"]})
+    strat.pick_card(play, lead_suit=None, trick_so_far=[])  # cache operator
+    strat._remaining_by_suit["Schellen"] = {"SEK"}
+    action = strat.pick_card(play, lead_suit=None, trick_so_far=[])
+    assert action == {"type": "play_card", "card": "SEU"}
+
+
+def test_two_trumps_out_lacks_boss_still_draws():
+    # Boundary: with TWO trumps outstanding the AI must keep drawing even
+    # without the boss — leading into the boss flushes it. comps holds the
+    # Schellen Koenig (trumpf=15); two higher trumps (SEU=18, SE9=17) are out.
+    play, strat = _make("comps", "Schellen",
+                        {"Schellen": ["K"], "Rosen": ["A"]})
+    strat.pick_card(play, lead_suit=None, trick_so_far=[])  # cache operator
+    strat._remaining_by_suit["Schellen"] = {"SEU", "SE9"}
+    action = strat.pick_card(play, lead_suit=None, trick_so_far=[])
+    # Still drawing → lead our highest trump (only the Koenig here).
+    assert action == {"type": "play_card", "card": "SEK"}
+
+
 # ── Rule B: both opponents void → stop drawing ───────────────────────────────
 
 def test_stops_trump_and_leads_guaranteed_winner():
