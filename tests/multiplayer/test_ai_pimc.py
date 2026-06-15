@@ -223,3 +223,57 @@ def test_pimc_is_deterministic_under_seed():
     p2 = ai_pimc.pimc_choose_lead(
         state, leads, deadline_s=5.0, rng=random.Random(42), min_samples=5, n=40)
     assert card_to_code(p1) == card_to_code(p2)
+
+
+# ── Task 5: HardStrategy generalized tracking ────────────────────────────
+from Cards_refactored import Play
+from ausbau.ai_strategies import HardStrategy
+
+
+def _make_strat(position, operator, my_suit_to_suffixes):
+    play = Play(spiel=1)
+    play.operator = operator
+    hand = {s: [] for s in SUITS}
+    for suit, sufs in my_suit_to_suffixes.items():
+        for suf in sufs:
+            hand[suit].append(create_card(_INVERSE_RANK[suf], suit))
+    setattr(play, position, hand)
+    strat = HardStrategy(position)
+    strat.on_spiel_start(play)
+    return play, strat
+
+
+def test_tracking_initializes_sizes_and_voids():
+    _, strat = _make_strat("comps", "Schellen", {"Schellen": "AK"})
+    for p in ("compo", "compn", "compe"):
+        assert strat._hand_sizes[p] == 9
+        assert strat._voids_all[p] == set()
+    assert strat._no_trump_except_under == set()
+
+
+def test_tracking_decrements_sizes_for_all_others():
+    _, strat = _make_strat("comps", "Schellen", {"Schellen": "AK"})
+    strat.on_card_played("compo", "R6")
+    strat.on_card_played("compn", "R7")
+    assert strat._hand_sizes["compo"] == 8
+    assert strat._hand_sizes["compn"] == 8
+    assert strat._hand_sizes["compe"] == 9   # untouched
+
+
+def test_tracking_marks_hard_void_on_nontrump_lead_discard():
+    _, strat = _make_strat("comps", "Schellen", {"Schellen": "A"})
+    # Rosen led; compe discards Eicheln -> compe void in Rosen.
+    strat.on_card_played("compn", "R6")   # lead Rosen (partner)
+    strat.on_card_played("compe", "E6")   # discard -> void in Rosen
+    assert "Rosen" in strat._voids_all["compe"]
+    assert "compe" not in strat._no_trump_except_under
+
+
+def test_tracking_marks_under_holdback_on_trump_lead_discard():
+    _, strat = _make_strat("comps", "Schellen", {"Schellen": "A"})
+    # Schellen (trump) led; compo discards Rosen -> "no trump except Under".
+    strat.on_card_played("comps", "SEA")  # trump led by us
+    strat.on_card_played("compo", "R6")   # discard on trump lead
+    assert "compo" in strat._no_trump_except_under
+    # NOT recorded as a hard trump void (they may still hold the Under):
+    assert "Schellen" not in strat._voids_all["compo"]

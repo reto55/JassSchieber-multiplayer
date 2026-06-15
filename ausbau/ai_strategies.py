@@ -105,6 +105,16 @@ class HardStrategy(AIStrategy):
         # Ordered (position, code) list reconstructing the current trick.
         # Reset every 4 cards; the first entry's suit is the lead suit.
         self._running_trick: list = []
+        # ── PIMC tracking (sub-project D) ────────────────────────────────
+        # Remaining hand size for each of the 3 non-self positions.
+        self._hand_sizes: dict[str, int] = {}
+        # Hard voids per non-self position, ALL suits (set on follow failure).
+        self._voids_all: dict[str, set] = {}
+        # Positions that discarded on a trump lead: "no trump except Under".
+        self._no_trump_except_under: set = set()
+        import random as _random
+        self._rng = _random.Random()
+        self._pimc_enabled = True
 
     def _opponents(self, play) -> list:
         """The two non-self, non-partner positions."""
@@ -133,6 +143,12 @@ class HardStrategy(AIStrategy):
             p: set() for p in ("comps", "compo", "compn", "compe")
         }
         self._running_trick = []
+
+        others = [p for p in ("comps", "compo", "compn", "compe")
+                  if p != self.position]
+        self._hand_sizes = {p: 9 for p in others}
+        self._voids_all = {p: set() for p in others}
+        self._no_trump_except_under = set()
 
     def on_card_played(self, player_position: str, card_code: str) -> None:
         """Update remaining-card tracking, void-in-trump detection,
@@ -167,6 +183,17 @@ class HardStrategy(AIStrategy):
             self._remaining_by_suit.get(suit, set()).discard(card_code)
             # Shown-suit tracking (any suit the opponent reveals).
             self._opp_shown_suits.setdefault(player_position, set()).add(suit)
+            # PIMC tracking: decrement hand size for this non-self player.
+            if player_position in self._hand_sizes:
+                self._hand_sizes[player_position] -= 1
+            # All-suit void + Under-holdback (house rule).
+            if not is_lead and lead_suit_name is not None and suit != lead_suit_name:
+                if lead_suit_name == self._operator:
+                    # Discard on a trump lead: no trump EXCEPT possibly the Under.
+                    self._no_trump_except_under.add(player_position)
+                else:
+                    # Discard on a non-trump lead: hard void in the led suit.
+                    self._voids_all.setdefault(player_position, set()).add(lead_suit_name)
             # Void-in-trump detection (house rule): a trump was led
             # (lead suit == operator) and this opponent discarded a non-trump
             # card → they hold no trump. Note: a player whose only trump is
