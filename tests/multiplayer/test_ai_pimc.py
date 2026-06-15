@@ -335,3 +335,43 @@ def test_rollout_raises_descriptive_error_on_empty_hand():
     lead = create_card(_INVERSE_RANK["A"], "Schellen")
     with pytest.raises(ValueError, match="empty hand"):
         ai_pimc.rollout(state, deal, lead)
+
+
+# ── Task 7: wire PIMC into HardStrategy._lead ────────────────────────────
+def test_lead_uses_pimc_when_enabled(monkeypatch):
+    play, strat = _make_strat("comps", "Schellen", {"Schellen": "A", "Eicheln": "6"})
+    strat._pimc_enabled = True
+    sentinel = create_card(_INVERSE_RANK["A"], "Schellen")  # SEA
+
+    called = {}
+    def fake_choose(state, leads, **kw):
+        called["yes"] = True
+        return sentinel
+    monkeypatch.setattr("ausbau.ai_pimc.pimc_choose_lead", fake_choose)
+
+    valid = play.comps["Schellen"] + play.comps["Eicheln"]
+    result = strat._lead(play, valid)
+    assert called.get("yes") is True
+    assert result == {"type": "play_card", "card": "SEA"}
+
+
+def test_lead_falls_back_to_heuristic_when_pimc_disabled():
+    play, strat = _make_strat("comps", "Schellen", {"Schellen": "AK9"})
+    strat._pimc_enabled = False
+    valid = play.comps["Schellen"]
+    result = strat._lead(play, valid)
+    # Heuristic rule A draws the HIGHEST trump by card.trumpf with trumps
+    # outstanding. Among A/K/9 the Schellen Nine (SE9, trumpf=17) outranks the
+    # Ace (SEA, trumpf=16) and Koenig (SEK, trumpf=15) in trump strength.
+    assert result["type"] == "play_card"
+    assert result["card"] == "SE9"
+
+
+def test_lead_falls_back_when_pimc_returns_none(monkeypatch):
+    play, strat = _make_strat("comps", "Schellen", {"Schellen": "AK9"})
+    strat._pimc_enabled = True
+    monkeypatch.setattr("ausbau.ai_pimc.pimc_choose_lead",
+                        lambda state, leads, **kw: None)
+    valid = play.comps["Schellen"]
+    result = strat._lead(play, valid)
+    assert result["card"] == "SE9"   # heuristic fallback fired (rule A, top trump)

@@ -319,6 +319,30 @@ class HardStrategy(AIStrategy):
         )
 
     def _lead(self, play, valid_cards) -> dict:
+        """Leading dispatcher. Trump modes: try PIMC (sub-project D), fall back
+        to the heuristic (which retains the Tier-1 sound stop). No-trump modes
+        keep the legacy behaviour."""
+        from Cards_refactored import SUITS
+        from ausbau.game_session import card_to_code
+
+        operator = play.operator
+        if operator not in SUITS:
+            return self._lead_legacy(play, valid_cards)
+
+        if self._pimc_enabled and valid_cards:
+            try:
+                import ausbau.ai_pimc as ai_pimc
+                state = self._build_engine_state(play)
+                pick = ai_pimc.pimc_choose_lead(
+                    state, valid_cards, rng=self._rng)
+            except Exception:
+                pick = None
+            if pick is not None:
+                return {"type": "play_card", "card": card_to_code(pick)}
+
+        return self._lead_heuristic(play, valid_cards)
+
+    def _lead_heuristic(self, play, valid_cards) -> dict:
         """Trump-drawing leading logic.
 
         Precedence (trump modes only):
@@ -347,10 +371,6 @@ class HardStrategy(AIStrategy):
         from ausbau.game_session import card_to_code, code_to_card
 
         operator = play.operator
-
-        # Non-trump modes: today's behaviour unchanged.
-        if operator not in SUITS:
-            return self._lead_legacy(play, valid_cards)
 
         my_trumps = [c for c in valid_cards if c.suit == operator]
         both_void = self._both_opponents_void_trump(play)
