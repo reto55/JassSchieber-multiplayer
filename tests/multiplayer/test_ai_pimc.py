@@ -170,3 +170,56 @@ def test_rollout_points_are_bounded_and_nonnegative():
     lead = create_card(_INVERSE_RANK["A"], "Schellen")
     pts = ai_pimc.rollout(state, deal, lead)
     assert 0 <= pts <= 300   # sanity: never negative, never absurd
+
+
+def _endgame_state():
+    """I hold the boss trump (SEA) and a losing side card (E6). One trump
+    (SE9) is outstanding with an OPPONENT (compo), who is void in Eicheln so
+    they would ruff an Eicheln lead. Leading the boss trump should score
+    better in EV than leading E6 into the ruff."""
+    my_hand = _hand({"Schellen": "A", "Eicheln": "6"})   # SEA boss, E6
+    others = ["compo", "compn", "compe"]
+    state = _basic_state(
+        my_hand=my_hand, others=others,
+        hand_sizes={"compo": 2, "compn": 2, "compe": 2},
+        voids={"compo": {"Eicheln"}, "compn": set(), "compe": set()},
+        unseen=[
+            create_card(_INVERSE_RANK["9"], "Schellen"),   # SE9 (opp trump)
+            create_card(_INVERSE_RANK["6"], "Rosen"),
+            create_card(_INVERSE_RANK["A"], "Eicheln"),
+            create_card(_INVERSE_RANK["7"], "Rosen"),
+            create_card(_INVERSE_RANK["K"], "Eicheln"),
+            create_card(_INVERSE_RANK["7"], "Eicheln"),
+        ],
+        operator="Schellen", me="comps",
+    )
+    return state
+
+
+def test_pimc_prefers_boss_trump_over_ruffable_side_lead():
+    state = _endgame_state()
+    leads = state.my_hand["Schellen"] + state.my_hand["Eicheln"]  # [SEA, E6]
+    rng = random.Random(7)
+    pick = ai_pimc.pimc_choose_lead(
+        state, leads, deadline_s=5.0, rng=rng, min_samples=5, n=60)
+    assert pick is not None
+    assert card_to_code(pick) == "SEA"   # lead the boss trump, not E6
+
+
+def test_pimc_returns_none_when_below_min_samples():
+    state = _endgame_state()
+    leads = state.my_hand["Schellen"] + state.my_hand["Eicheln"]
+    # deadline_s=0 -> no samples complete -> fallback signal.
+    pick = ai_pimc.pimc_choose_lead(
+        state, leads, deadline_s=0.0, rng=random.Random(1), min_samples=5, n=60)
+    assert pick is None
+
+
+def test_pimc_is_deterministic_under_seed():
+    state = _endgame_state()
+    leads = state.my_hand["Schellen"] + state.my_hand["Eicheln"]
+    p1 = ai_pimc.pimc_choose_lead(
+        state, leads, deadline_s=5.0, rng=random.Random(42), min_samples=5, n=40)
+    p2 = ai_pimc.pimc_choose_lead(
+        state, leads, deadline_s=5.0, rng=random.Random(42), min_samples=5, n=40)
+    assert card_to_code(p1) == card_to_code(p2)

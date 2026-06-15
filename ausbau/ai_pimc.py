@@ -8,6 +8,7 @@ heuristic playout policy, and returns the highest expected-value lead.
 
 See docs/superpowers/specs/2026-06-15-schieber-ai-pimc-design.md.
 """
+import time
 from dataclasses import dataclass
 from typing import Optional
 
@@ -170,3 +171,43 @@ def rollout(state: EngineState, deal: dict, lead_card) -> int:
     if (last_winner in SN_PLAYERS) == my_is_sn:
         my_points += 5 * _mode_multiplier(operator)
     return my_points
+
+
+def pimc_choose_lead(state: EngineState, candidate_leads, *,
+                     deadline_s: float = PIMC_DEADLINE_S,
+                     rng=None,
+                     min_samples: int = PIMC_MIN_SAMPLES,
+                     n: int = PIMC_N) -> Optional[object]:
+    """Return the max-EV lead Card from `candidate_leads`, or None when fewer
+    than `min_samples` deals complete within the time-box (caller should then
+    fall back to the heuristic lead)."""
+    import random as _random
+    if rng is None:
+        rng = _random.Random()
+    if not candidate_leads:
+        return None
+
+    sampler = DealSampler(state)
+    totals = {card_to_code(c): 0.0 for c in candidate_leads}
+    completed = 0
+    start = time.monotonic()
+
+    for _ in range(n):
+        if time.monotonic() - start > deadline_s:
+            break
+        try:
+            deal = sampler.sample(rng)
+        except SamplingError:
+            continue
+        for c in candidate_leads:
+            totals[card_to_code(c)] += rollout(state, deal, c)
+        completed += 1
+
+    if completed < min_samples:
+        return None
+
+    best_code = max(totals, key=lambda code: totals[code] / completed)
+    for c in candidate_leads:
+        if card_to_code(c) == best_code:
+            return c
+    return None
