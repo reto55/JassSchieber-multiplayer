@@ -118,7 +118,8 @@
       "Bash(sed -n 555,580p /home/reto/Dokumente/JassSchieber-multiplayer/ausbau/game_session.py)",
       "Bash(sed -n 80,105p /home/reto/Dokumente/JassSchieber-multiplayer/ausbau/room.py)",
       "Bash(sed -n 560,580p ausbau/game_session.py)",
-      "Bash(sed -n 975,1000p ausbau/game_session.py)"
+      "Bash(sed -n 975,1000p ausbau/game_session.py)",
+      "Bash(rtk pip *)"
     ]
   }
 }
