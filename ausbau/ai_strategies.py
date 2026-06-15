@@ -294,6 +294,30 @@ class HardStrategy(AIStrategy):
             self._opp_void_trump.get(p, False) for p in opps
         )
 
+    def _build_engine_state(self, play):
+        """Adapt current tracking into an ai_pimc.EngineState."""
+        from ausbau.ai_pimc import EngineState
+        from ausbau.game_session import code_to_card
+        from Cards_refactored import SUITS
+
+        me = self.position
+        others = [p for p in ("comps", "compo", "compn", "compe") if p != me]
+        unseen = [code_to_card(code)
+                  for suit in SUITS
+                  for code in self._remaining_by_suit.get(suit, set())]
+        return EngineState(
+            me=me,
+            operator=play.operator,
+            partner=play.partner,
+            folger=play.folger,
+            my_hand=getattr(play, me),
+            others=others,
+            hand_sizes={p: self._hand_sizes[p] for p in others},
+            voids={p: set(self._voids_all.get(p, set())) for p in others},
+            no_trump_except_under=set(self._no_trump_except_under),
+            unseen=unseen,
+        )
+
     def _lead(self, play, valid_cards) -> dict:
         """Trump-drawing leading logic.
 

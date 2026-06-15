@@ -3,7 +3,7 @@ import random
 import pytest
 
 from Cards_refactored import SUITS, create_card, Under
-from ausbau.game_session import RANK_SUFFIX, card_to_code, PLAYERS
+from ausbau.game_session import RANK_SUFFIX, card_to_code, code_to_card, PLAYERS
 from ausbau import ai_pimc
 
 _INVERSE_RANK = {v: k for k, v in RANK_SUFFIX.items()}
@@ -277,3 +277,61 @@ def test_tracking_marks_under_holdback_on_trump_lead_discard():
     assert "compo" in strat._no_trump_except_under
     # NOT recorded as a hard trump void (they may still hold the Under):
     assert "Schellen" not in strat._voids_all["compo"]
+
+
+# ── Task 6: HardStrategy._build_engine_state ─────────────────────────────
+def _remove_from_live_hand(play, position, code):
+    """Drop `code` from a live Play hand to mirror a real card being played."""
+    card = code_to_card(code)
+    bucket = getattr(play, position)[card.suit]
+    for i, c in enumerate(bucket):
+        if card_to_code(c) == code:
+            del bucket[i]
+            return
+
+
+def test_build_engine_state_is_consistent():
+    # A balanced, real 9-card hand (the invariant only holds for consistent
+    # deals, exactly as in live play). One full trump-led trick is simulated
+    # in lockstep with our own hand shrinking, so the unseen set tracks the
+    # three hidden hands exactly.
+    play, strat = _make_strat(
+        "comps", "Schellen",
+        {"Schellen": "AKO", "Eicheln": "AK", "Rosen": "AK", "Schilten": "AK"})
+    # We lead trump SEA (remove it from our live hand); opponents discard on
+    # the trump lead (-> Under-holdback), partner follows trump.
+    _remove_from_live_hand(play, "comps", "SEA")
+    strat.on_card_played("comps", "SEA")  # trump led by us
+    strat.on_card_played("compo", "R6")   # discard on trump lead -> holdback
+    strat.on_card_played("compn", "SE9")  # partner follows trump (not in our hand)
+    strat.on_card_played("compe", "E6")   # discard on trump lead -> holdback
+    state = strat._build_engine_state(play)
+    assert state.me == "comps"
+    assert state.operator == "Schellen"
+    assert set(state.others) == {"compo", "compn", "compe"}
+    # Invariant: unseen card count equals sum of the 3 hidden hand sizes.
+    assert len(state.unseen) == sum(state.hand_sizes[p] for p in state.others)
+    assert "compo" in state.no_trump_except_under
+    assert "compe" in state.no_trump_except_under
+
+
+# ── MINOR #1: rollout raises a descriptive error on unbalanced EngineState
+def test_rollout_raises_descriptive_error_on_empty_hand():
+    # Unbalanced: a non-self seat has an empty hand while cards remain
+    # elsewhere, so a seat is eventually asked to play from nothing.
+    my_hand = _hand({"Schellen": "AK"})           # me holds 2 cards
+    others = ["compo", "compn", "compe"]
+    deal = {
+        "compo": _hand({"Schellen": "9"}),        # only 1 card (unbalanced)
+        "compn": _hand({}),                        # EMPTY hand
+        "compe": _hand({"Eicheln": "7"}),          # only 1 card
+    }
+    state = _basic_state(
+        my_hand=my_hand, others=others,
+        hand_sizes={"compo": 1, "compn": 0, "compe": 1},
+        unseen=[c for h in deal.values() for cs in h.values() for c in cs],
+        operator="Schellen", me="comps",
+    )
+    lead = create_card(_INVERSE_RANK["A"], "Schellen")
+    with pytest.raises(ValueError, match="empty hand"):
+        ai_pimc.rollout(state, deal, lead)

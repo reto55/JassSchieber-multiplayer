@@ -51,7 +51,15 @@ def _to_hand_dict(cards) -> dict:
 
 
 class DealSampler:
-    """Samples the 3 hidden hands consistent with an EngineState's constraints."""
+    """Samples the 3 hidden hands consistent with an EngineState's constraints.
+
+    Uses most-constrained-card-first ordering plus restart, which keeps sampling
+    fast on typical inputs. This is a heuristic, not a complete solver: greedy
+    placement with restart can still fail to find a consistent assignment within
+    ``MAX_ATTEMPTS`` on hard-but-feasible inputs, in which case ``sample`` raises
+    :class:`SamplingError`. Callers tolerate this by skipping the failed draw
+    (``except SamplingError: continue``) and trying the next sample.
+    """
 
     MAX_ATTEMPTS = 200
 
@@ -130,6 +138,15 @@ def rollout(state: EngineState, deal: dict, lead_card) -> int:
     Every seat (including state.me's later plays) uses the heuristic
     ai_select_card policy. Reuses determine_trick_winner / trick_points so
     trick resolution matches the live game exactly.
+
+    Precondition — balanced hands: the four hands must be size-consistent so
+    every seat always has a card to play on its turn (state.me holds
+    ``len(my_hand)`` cards and each other seat holds exactly
+    ``state.hand_sizes[p]`` cards, with all four equal after `lead_card` is
+    removed). The PIMC path guarantees this via DealSampler's capacity
+    constraint (``len(unseen) == sum(hand_sizes over others)``). If an
+    unbalanced deal slips through, a seat is asked to play from an empty hand;
+    we raise a descriptive ``ValueError`` rather than an opaque ``max([])``.
     """
     operator, folger, me = state.operator, state.folger, state.me
     hands = {me: _clone_hand(state.my_hand)}
@@ -153,6 +170,11 @@ def rollout(state: EngineState, deal: dict, lead_card) -> int:
             if first_trick and pos == me:
                 card = lead_card           # forced, already removed
             else:
+                if not any(hands[pos][s] for s in SUITS):
+                    raise ValueError(
+                        f"rollout received an unbalanced deal: seat {pos!r} "
+                        f"has an empty hand while cards remain elsewhere "
+                        f"(balanced-hands precondition violated)")
                 card = ai_select_card(hands[pos], lead_suit, operator,
                                       trick_so_far=trick_so_far)
                 _remove_card(hands[pos], card)
