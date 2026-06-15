@@ -129,3 +129,44 @@ def test_sampler_is_deterministic_under_seed():
     norm = lambda d: {p: sorted(card_to_code(c) for cs in h.values() for c in cs)
                       for p, h in d.items()}
     assert norm(d1) == norm(d2)
+
+
+def test_rollout_is_deterministic():
+    # 2-card endgame: I lead, everyone has 2 cards. Schellen trump.
+    my_hand = _hand({"Schellen": "A", "Eicheln": "6"})  # SEA (boss), E6
+    others = ["compo", "compn", "compe"]
+    deal = {
+        "compo": _hand({"Schellen": "9", "Rosen": "6"}),
+        "compn": _hand({"Eicheln": "A", "Rosen": "7"}),   # partner
+        "compe": _hand({"Schellen": "U", "Eicheln": "7"}),
+    }
+    state = _basic_state(
+        my_hand=my_hand, others=others,
+        hand_sizes={p: 2 for p in others},
+        unseen=[c for h in deal.values() for cs in h.values() for c in cs],
+        operator="Schellen", me="comps",
+    )
+    lead = create_card(_INVERSE_RANK["A"], "Schellen")    # lead SEA
+    s1 = ai_pimc.rollout(state, deal, lead)
+    s2 = ai_pimc.rollout(state, deal, lead)
+    assert s1 == s2
+    assert isinstance(s1, int)
+
+
+def test_rollout_points_are_bounded_and_nonnegative():
+    my_hand = _hand({"Schellen": "A", "Eicheln": "6"})
+    others = ["compo", "compn", "compe"]
+    deal = {
+        "compo": _hand({"Schellen": "9", "Rosen": "6"}),
+        "compn": _hand({"Eicheln": "A", "Rosen": "7"}),
+        "compe": _hand({"Schellen": "U", "Eicheln": "7"}),
+    }
+    state = _basic_state(
+        my_hand=my_hand, others=others,
+        hand_sizes={p: 2 for p in others},
+        unseen=[c for h in deal.values() for cs in h.values() for c in cs],
+        operator="Schellen", me="comps",
+    )
+    lead = create_card(_INVERSE_RANK["A"], "Schellen")
+    pts = ai_pimc.rollout(state, deal, lead)
+    assert 0 <= pts <= 300   # sanity: never negative, never absurd

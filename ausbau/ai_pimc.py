@@ -12,6 +12,10 @@ from dataclasses import dataclass
 from typing import Optional
 
 from Cards_refactored import SUITS, Under
+from ausbau.game_session import (
+    SN_PLAYERS, ai_select_card, determine_trick_winner, trick_points,
+    card_to_code, _mode_multiplier,
+)
 
 # Tuning constants (see spec §6). Synchronous, time-boxed.
 PIMC_DEADLINE_S = 0.12     # wall-clock budget per leading decision
@@ -90,3 +94,79 @@ class DealSampler:
                 return {p: _to_hand_dict(result[p]) for p in st.others}
         raise SamplingError(
             f"no consistent deal in {self.MAX_ATTEMPTS} attempts")
+
+
+def _clone_hand(hand: dict) -> dict:
+    """Shallow-copy a {suit: [Card,...]} hand (Card objects are immutable here)."""
+    return {s: list(hand.get(s, [])) for s in SUITS}
+
+
+def _remove_card(hand: dict, card) -> None:
+    """Remove `card` from a hand dict by code identity."""
+    code = card_to_code(card)
+    bucket = hand[card.suit]
+    for i, c in enumerate(bucket):
+        if card_to_code(c) == code:
+            del bucket[i]
+            return
+    raise KeyError(f"{code} not in hand")
+
+
+def _order_from(leader: str, folger: dict) -> list:
+    """The 4 positions in play order starting at `leader`."""
+    order = [leader]
+    p = folger[leader]
+    while p != leader:
+        order.append(p)
+        p = folger[p]
+    return order
+
+
+def rollout(state: EngineState, deal: dict, lead_card) -> int:
+    """Play the spiel out from the current position with `lead_card` led by
+    `state.me`; return state.me's TEAM points for the remainder.
+
+    Every seat (including state.me's later plays) uses the heuristic
+    ai_select_card policy. Reuses determine_trick_winner / trick_points so
+    trick resolution matches the live game exactly.
+    """
+    operator, folger, me = state.operator, state.folger, state.me
+    hands = {me: _clone_hand(state.my_hand)}
+    for p in state.others:
+        hands[p] = _clone_hand(deal[p])
+
+    _remove_card(hands[me], lead_card)
+    my_is_sn = me in SN_PLAYERS
+    my_points = 0
+    leader = me
+    first_trick = True
+    last_winner = me
+
+    while any(any(h[s] for s in SUITS) for h in hands.values()):
+        order = _order_from(leader, folger)
+        trick = {}
+        lead_suit = None
+        for i, pos in enumerate(order):
+            trick_so_far = [{"position": k, "card": card_to_code(v)}
+                            for k, v in trick.items()]
+            if first_trick and pos == me:
+                card = lead_card           # forced, already removed
+            else:
+                card = ai_select_card(hands[pos], lead_suit, operator,
+                                      trick_so_far=trick_so_far)
+                _remove_card(hands[pos], card)
+            if i == 0:
+                lead_suit = card.suit
+            trick[pos] = card
+        first_trick = False
+        winner = determine_trick_winner(trick, order[0], operator, folger)
+        pts = trick_points(trick, operator)
+        if (winner in SN_PLAYERS) == my_is_sn:
+            my_points += pts
+        last_winner = winner
+        leader = winner
+
+    # Last-trick bonus (+5, scaled by mode multiplier) goes to the final winner.
+    if (last_winner in SN_PLAYERS) == my_is_sn:
+        my_points += 5 * _mode_multiplier(operator)
+    return my_points
