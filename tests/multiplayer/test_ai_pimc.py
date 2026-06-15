@@ -375,3 +375,17 @@ def test_lead_falls_back_when_pimc_returns_none(monkeypatch):
     valid = play.comps["Schellen"]
     result = strat._lead(play, valid)
     assert result["card"] == "SE9"   # heuristic fallback fired (rule A, top trump)
+
+
+# ── Task 9: end-to-end smoke — live PIMC leading path ────────────────────
+def test_pick_card_leading_with_pimc_returns_legal_card():
+    play, strat = _make_strat(
+        "comps", "Schellen",
+        {"Schellen": "AK", "Eicheln": "A6", "Rosen": "6"})
+    strat._pimc_enabled = True
+    strat._rng = random.Random(0)
+    # Leading (lead_suit=None), empty trick.
+    result = strat.pick_card(play, None, [])
+    assert result["type"] == "play_card"
+    legal = set(card_to_code(c) for s in SUITS for c in play.comps[s])
+    assert result["card"] in legal
